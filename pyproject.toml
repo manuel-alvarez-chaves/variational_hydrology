@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "Information Hydrology"
+version = "0.1.0"
+description = "Library for the development of hydrological rainfall-runoff models using Information Theory."
+authors = ["Manuel Álvarez Chaves <manuel.alvarez-chaves@simtech.uni-stuttgart.de>"]
+license = "GPL-3"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
