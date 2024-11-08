@@ -5,22 +5,39 @@ from torch import nn
 
 
 class SamplingMode(Enum):
+    """
+    Enumeration representing the Sampling Mode for the VLSTM.
+    
+    Attributes:
+    -----------
+        STANDARD : int
+            Sample from a standard normal distribution
+        LEARNED: int
+            Sample from the learned distribution
+    """
     STANDARD = 1
     LEARNED = 2
 
 class VLSTM(nn.Module):
     def __init__(self, num_input, num_hidden):
         super().__init__()
+        """
+        Variational LSTM (VLSTM) model.
+
+        Parameters:
+        -----------
+            num_input : int
+                Number of input features
+            num_hidden : int
+                Number of hidden units in the LSTM
+        """
         self.input_size = num_input
         self.hidden_size = num_hidden
 
         # Encoder | Decoder
         self.encoder = nn.LSTM(input_size=num_input, hidden_size=num_hidden, batch_first=True)
-        self.scale = nn.Sequential(
-            nn.Linear(num_hidden, num_hidden),
-            nn.Sigmoid(),
-        )
         self.decoder = nn.Linear(num_hidden, 1)
+        self.eps = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
 
         # Variational Inference
         self.mu = nn.Linear(num_hidden, num_hidden)
@@ -33,10 +50,12 @@ class VLSTM(nn.Module):
     
     def encode(self, x):
         _, (h_n, _) = self.encoder(x)
-        return self.scale(h_n[-1]) # many-to-one
+        return h_n[-1] # many-to-one
     
     def decode(self, encoded, z):
-        return self.decoder(encoded * (1 + z))
+        eps = self.eps(encoded)
+        # return self.decoder(encoded * (1 + z)) # proportianl error
+        return self.decoder(encoded * (eps + z)) # additive error 
     
     def forward(self, x):
         encoded = self.encode(x)
