@@ -5,21 +5,15 @@ from torch import nn
 
 
 class SamplingMode(Enum):
-    """
-    Enumeration representing the Sampling Mode for the VLSTM.
-    
-    Attributes:
-    -----------
-        STANDARD : int
-            Sample from a standard normal distribution
-        LEARNED: int
-            Sample from the learned distribution
-    """
     STANDARD = 1
     LEARNED = 2
 
+class ErrorMode(Enum):
+    PROPORTIONAL = 1
+    ADDITIVE = 2
+
 class VLSTM(nn.Module):
-    def __init__(self, num_input, num_hidden):
+    def __init__(self, num_input, num_hidden, error=ErrorMode.PROPORTIONAL):
         super().__init__()
         """
         Variational LSTM (VLSTM) model.
@@ -33,6 +27,7 @@ class VLSTM(nn.Module):
         """
         self.input_size = num_input
         self.hidden_size = num_hidden
+        self.error = error
 
         # Encoder | Decoder
         self.encoder = nn.LSTM(input_size=num_input, hidden_size=num_hidden, batch_first=True)
@@ -40,8 +35,8 @@ class VLSTM(nn.Module):
         self.eps = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
 
         # Variational Inference
-        self.mu = nn.Linear(num_hidden, num_hidden)
-        self.log_var = nn.Linear(num_hidden, num_hidden)
+        self.fc_mu = nn.Linear(num_hidden, num_hidden)
+        self.fc_log_var = nn.Linear(num_hidden, num_hidden)
 
     def reparametrize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
@@ -53,14 +48,16 @@ class VLSTM(nn.Module):
         return h_n[-1] # many-to-one
     
     def decode(self, encoded, z):
-        eps = self.eps(encoded)
-        # return self.decoder(encoded * (1 + z)) # proportianl error
-        return self.decoder(encoded * (eps + z)) # additive error 
+        if self.error == ErrorMode.PROPORTIONAL:
+            eps = 1 # econded * (1 + z)
+        elif self.error == ErrorMode.ADDITIVE:
+            eps = self.eps(encoded) # encoded * (eps + z)
+        return self.decoder(encoded * (eps + z))
     
     def forward(self, x):
         encoded = self.encode(x)
-        mu = self.mu(encoded)
-        log_var = self.log_var(encoded)
+        mu = self.fc_mu(encoded)
+        log_var = self.fc_log_var(encoded)
         z = self.reparametrize(mu, log_var)
         decoded = self.decode(encoded, z)
         return encoded, decoded, mu, log_var
@@ -72,8 +69,8 @@ class VLSTM(nn.Module):
         if mode == SamplingMode.STANDARD:
             z = torch.randn(num_batches, num_samples, self.hidden_size)
         elif mode == SamplingMode.LEARNED:
-            mu = self.mu(encoded)
-            log_var = self.log_var(encoded)
+            mu = self.fc_mu(encoded)
+            log_var = self.fc_log_var(encoded)
             z = self.reparametrize(mu, log_var) 
         else:
             raise ValueError("Invalid Sampling Mode")
