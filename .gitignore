@@ -1,5 +1,6 @@
 # Miscellaneous
 notebooks/
+experiments/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
