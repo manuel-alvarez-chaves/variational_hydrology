@@ -4,6 +4,19 @@ import numpy as np
 import torch
 
 
+def seconds_to_time(elapsed_time: float) -> str:
+    """Format seconds to time as %H:%M:%S.
+
+    Parameters
+    ----------
+    elapsed_time : float
+        Time in seconds.
+
+    """
+    m, s = divmod(elapsed_time, 60)
+    h, m = divmod(m, 60)
+    return f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
+
 def set_seed(seed: int | None) -> int:
     """Set random seed.
 
