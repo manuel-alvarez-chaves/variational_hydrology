@@ -1,5 +1,6 @@
-from torch import nn
 import torch
+from torch import nn
+
 
 class LSTMGMM(nn.Module):
     def __init__(self, input_size, hidden_size, num_gaussians):
@@ -10,10 +11,11 @@ class LSTMGMM(nn.Module):
 
         self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.fc_mu = nn.Linear(hidden_size, num_gaussians)
-        self.seq_sigma = nn.Sequential(
-            nn.Linear(hidden_size, num_gaussians),
-            nn.Softplus(),
-        )
+        # self.seq_sigma = nn.Sequential(
+        #     nn.Linear(hidden_size, num_gaussians),
+        #     nn.Softplus(),
+        # )
+        self.fc_sigma = nn.Linear(hidden_size, num_gaussians)
         self.seq_w = nn.Sequential(
             nn.Linear(hidden_size, num_gaussians),
             nn.Softmax(dim=1),
@@ -25,7 +27,7 @@ class LSTMGMM(nn.Module):
         _, (h_n, _) = self.lstm(x)
         out = h_n[-1]
         mu = self.fc_mu(out)
-        sigma = self.seq_sigma(out)
+        sigma = torch.exp(self.fc_sigma(out))
         w = self.seq_w(out)
         return mu, sigma, w
     
