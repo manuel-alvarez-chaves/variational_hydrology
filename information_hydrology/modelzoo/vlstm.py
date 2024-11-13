@@ -24,6 +24,8 @@ class VLSTM(nn.Module):
                 Number of input features
             num_hidden : int
                 Number of hidden units in the LSTM
+            error : ErrorMode
+                Error mode for the VLSTM model (see 'decode')
         """
         self.input_size = num_input
         self.hidden_size = num_hidden
@@ -33,11 +35,15 @@ class VLSTM(nn.Module):
         self.encoder = nn.LSTM(input_size=num_input, hidden_size=num_hidden, batch_first=True)
         self.decoder = nn.Linear(num_hidden, 1)
         self.eps = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
+        self._reset_parameters()
 
         # Variational Inference
         self.fc_mu = nn.Linear(num_hidden, num_hidden)
         self.fc_log_var = nn.Linear(num_hidden, num_hidden)
 
+    def _reset_parameters(self):
+        self.encoder.bias_hh_l0.data[self.hidden_size:2 * self.hidden_size] = 3.0
+    
     def reparametrize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std).requires_grad_(False)
@@ -49,7 +55,7 @@ class VLSTM(nn.Module):
     
     def decode(self, encoded, z):
         if self.error == ErrorMode.PROPORTIONAL:
-            eps = 1 # econded * (1 + z)
+            eps = 1 # enconded * (1 + z)
         elif self.error == ErrorMode.ADDITIVE:
             eps = self.eps(encoded) # encoded * (eps + z)
         return self.decoder(encoded * (eps + z))
