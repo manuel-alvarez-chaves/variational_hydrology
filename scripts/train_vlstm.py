@@ -3,9 +3,9 @@ from pathlib import Path
 
 import torch
 import yaml
-from information_hydrology.modelzoo.cudalstm import CudaLSTM
+from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.metrics import loss_mse
+from information_hydrology.utils.metrics import loss_kld, loss_mse
 from information_hydrology.utils.miscellaneous import (
     dump_config,
     seconds_to_time,
@@ -19,7 +19,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "LSTM_531"
+experiment_name = "VLSTM_add_531"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -46,13 +46,14 @@ logger.info(f"Using device: {device}")
 # Model
 num_inputs = len(config["dynamic_inputs"]) + len(config["static_attributes"])
 num_hidden = 10
-model = CudaLSTM(num_inputs, num_hidden).to(device)
+model = VLSTM(num_inputs, num_hidden, ErrorMode.ADDITIVE).to(device)
 
 config.update(
     {
-        "model": "CudaLSTM",
+        "model": "vLSTM",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
+        "error": "additive",
     }
 )
 
@@ -86,18 +87,23 @@ x_d, y, date, x_s = sample.values()
 
 # # # # # # # # # # # # # # # PART 03 # # # # # # # # # # # # # # # # #
 
-num_epochs = 10
-num_validate_every = 5
+num_epochs = 60
+num_validate_every = 4
+lrs = [1e-3] * 40 + [1e-4] * 20
+betas = [1e-5] * 10 + [1e-3] * 10 + [2e-3] * 10 + [3e-3] * 10 + [1e-2] * 20
 
 logger.info("Training loop")
 time_training = time.time()
-logger.info(f"{'Epoch':<5} | {'Train Loss':<10} | {'Time':<8} | {'Val. Loss':<10} | {'Time':<8}")
+logger.info(f"{'':^5} | {'':^8} | {'':^8} | {'Train Loss':^30} | {'':^8} | {'Val. Loss':^30} | {'':^8}")
+logger.info(f"{'Epoch':^5} | {'LR':^8} | {'Beta':^8} | {'Loss 1':^8} | {'Loss 2':^10} | {'Total':^8} | {'Time':^8} | {'Loss 1':^8} | {'Loss 2':^10} | {'Total':^8} | {'Time':^8}")
 
-optimizer = torch.optim.Adam(model.parameters())
 for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch"):
+    # Change LR at every epoch
+    optimizer = torch.optim.Adam(model.parameters(), lr=lrs[epoch])
+    
     # Training
     time_epoch = time.time()
-    epoch_loss = []
+    epoch_loss_1, epoch_loss_2, epoch_total_loss = [], [], []
 
     model.train()
     for sample in tqdm(dl_train, desc="Training", ncols=79, ascii=True, unit="batch", position=1):
@@ -109,36 +115,39 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         
         # Forward pass
         optimizer.zero_grad()
-        y_hat = model(x)
-        loss = loss_mse(y_hat, y)
+        _, y_hat, mu, log_var = model(x)
+        loss_1 = loss_mse(y_hat, y)
+        loss_2 = loss_kld(mu, log_var)
+        loss = loss_1 + betas[epoch] * loss_2
         loss.backward()
         optimizer.step()
-        epoch_loss.append(loss.item())
+
+        epoch_loss_1.append(loss_1.item())
+        epoch_loss_2.append(loss_2.item())
+        epoch_total_loss.append(loss.item())
 
         # Delete
         del x_d, y, x_s, x, y_hat, loss
 
     # Average loss epoch
-    epoch_average_loss = sum(epoch_loss) / len(epoch_loss)
+    loss_train_1 = sum(epoch_loss_1) / len(epoch_loss_1)
+    loss_train_2 = sum(epoch_loss_2) / len(epoch_loss_2)
+    loss_train_total = sum(epoch_total_loss) / len(epoch_total_loss)
 
     # Save model
     path_save_model = path_save_folder / f"model_epoch_{(epoch + 1):02d}.pt"
     torch.save(model.state_dict(), path_save_model)
 
     # Save time
-    time_epoch = time.time() - time_epoch
+    time_train = seconds_to_time(time.time() - time_epoch)
 
     if (epoch + 1) % num_validate_every != 0:
-        logger.info(f"{epoch + 1:<5} | {epoch_average_loss:<10.5f} | {seconds_to_time(time_epoch)} | {'':<10} | {'':<10}")
+        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {betas[epoch]:^8.1e} | {loss_train_1:^8.4f} | {loss_train_2:^10.4f} | {loss_train_total:^8.4f} | {time_train:^8} | {'':^8} | {'':^10} | {'':^8} | {'':^8}")
         continue
-
-    # Save from training
-    train_loss = epoch_average_loss
-    train_time = time_epoch
 
     # Start validation
     time_epoch = time.time()
-    epoch_loss = []
+    epoch_loss_1, epoch_loss_2, epoch_total_loss = [], [], []
 
     model.eval()
     for sample in tqdm(dl_val, desc="Validation", ncols=79, ascii=True, unit="batch", position=1):
@@ -149,21 +158,28 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         y = y[:, -1, :].to(device)
 
         # Forward pass
-        y_hat = model(x)
-        loss = loss_mse(y_hat, y)
-        if loss.isnan():
+        _, y_hat, mu, log_var = model(x)
+        loss_1 = loss_mse(y_hat, y)
+        loss_2 = loss_kld(mu, log_var)
+        if loss_1.isnan() or loss_2.isnan():
             continue
-        epoch_loss.append(loss.item())
+        loss = loss_1 + betas[epoch] * loss_2
+        
+        epoch_loss_1.append(loss_1.item())
+        epoch_loss_2.append(loss_2.item())
+        epoch_total_loss.append(loss.item())
 
         # Delete
         del x_d, y, x_s, x, y_hat, loss
 
     # Average loss epoch
-    epoch_average_loss = sum(epoch_loss) / len(epoch_loss)
+    loss_val_1 = sum(epoch_loss_1) / len(epoch_loss_1)
+    loss_val_2 = sum(epoch_loss_2) / len(epoch_loss_2)
+    loss_val_total = sum(epoch_total_loss) / len(epoch_total_loss)
 
     # Print report
-    time_epoch = time.time() - time_epoch
-    logger.info(f"{epoch + 1:<5} | {train_loss:<10.5f} | {seconds_to_time(train_time)} | {epoch_average_loss:<10.5f} | {seconds_to_time(time_epoch)}")
+    time_val = seconds_to_time(time.time() - time_epoch)
+    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {betas[epoch]:^8.1e} | {loss_train_1:^8.4f} | {loss_train_2:^10.4f} | {loss_train_total:^8.4f} | {time_train:^8} | {loss_val_1:^8.4f} | {loss_val_2:^10.4f} | {loss_val_total:^8.4f} | {time_val:^8}")
 
 # Print final report
 time_training = time.time() - time_training

@@ -1,7 +1,9 @@
 import random
+from pathlib import Path
 
 import numpy as np
 import torch
+import yaml
 
 
 def seconds_to_time(elapsed_time: float) -> str:
@@ -39,3 +41,8 @@ def set_seed(seed: int | None) -> int:
     torch.cuda.manual_seed(seed)
     torch.manual_seed(seed)
     return seed
+
+def dump_config(config: dict, path: str) -> None:
+    config["train_dir"] = str(config["train_dir"].as_posix())
+    with Path.open(path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
