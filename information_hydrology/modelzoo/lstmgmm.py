@@ -10,7 +10,7 @@ class LSTMGMM(nn.Module):
 
         self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.fc_mu = nn.Linear(hidden_size, num_gaussians)
-        self.seq_var = nn.Sequential(
+        self.seq_sigma = nn.Sequential(
             nn.Linear(hidden_size, num_gaussians),
             nn.Softplus(),
         )
@@ -25,14 +25,14 @@ class LSTMGMM(nn.Module):
         _, (h_n, _) = self.lstm(x)
         out = h_n[-1]
         mu = self.fc_mu(out)
-        var = self.seq_var(out)
+        sigma = self.seq_sigma(out)
         w = self.seq_w(out)
-        return mu, var, w
+        return mu, sigma, w
     
     def sample(self, x, num_samples):
         with torch.no_grad():
-            mu, var, w = self.forward(x)
-            samples = [(torch.randn_like(mu) * var + mu).unsqueeze(1) for _ in range(num_samples)]
+            mu, sigma, w = self.forward(x)
+            samples = [(torch.randn_like(mu) * sigma + mu).unsqueeze(1) for _ in range(num_samples)]
             samples = torch.cat(samples, dim=1)
             samples = (samples * w.unsqueeze(1)).sum(dim=-1)      
         return samples
