@@ -9,9 +9,8 @@ Here's an example for Windows:
 ```console
 python -m venv .venv
 source .venv/Scripts/activate
-
-(.venv) pip install poetry
-(.venv) poetry install
+pip install poetry
+poetry install
 ```
 For Linux switch "Scripts" in the command beginning with source for "bin". So: 
 ```console
