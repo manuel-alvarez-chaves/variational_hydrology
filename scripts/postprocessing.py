@@ -47,6 +47,7 @@ match model_name:
         raise ValueError(f"Model {model} not recognized")
 
 model.load_state_dict(torch.load(list(path_run.glob("*.pt"))[-1], map_location=device, weights_only=False))
+model.to(device)
 model.eval()
 
 # Load data
@@ -89,7 +90,7 @@ for basin in tqdm(basins, ascii=True):
         
         dates.append(date[:, -1])
         y_obs.append(y[:, -1, 0].detach().clone().numpy())
-        y_hat.append(pred.detach().clone().numpy())
+        y_hat.append(pred.detach().cpu().clone().numpy())
         del x_d, y, date, x_s, x, pred
     
     if model_name != "CudaLSTM":

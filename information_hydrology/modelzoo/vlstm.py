@@ -73,7 +73,7 @@ class VLSTM(nn.Module):
         encoded = self.encode(x)
         encoded = encoded.unsqueeze(1).repeat(1, num_samples, 1)
         if mode == SamplingMode.STANDARD:
-            z = torch.randn(num_batches, num_samples, self.hidden_size)
+            z = torch.randn(num_batches, num_samples, self.hidden_size).to(x.device)
         elif mode == SamplingMode.LEARNED:
             mu = self.fc_mu(encoded)
             log_var = self.fc_log_var(encoded)
