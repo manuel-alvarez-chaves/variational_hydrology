@@ -5,7 +5,7 @@ import torch
 import yaml
 from information_hydrology.modelzoo.lstmgmm import LSTMGMM
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.metrics import loss_nll
+from information_hydrology.utils.loss_fn import loss_nll
 from information_hydrology.utils.miscellaneous import (
     dump_config,
     seconds_to_time,
@@ -19,7 +19,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "LSTMGMM_10_531"
+experiment_name = "LSTMGMM_10_3_5"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 

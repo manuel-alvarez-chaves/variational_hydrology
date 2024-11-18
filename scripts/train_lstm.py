@@ -5,7 +5,7 @@ import torch
 import yaml
 from information_hydrology.modelzoo.cudalstm import CudaLSTM
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.metrics import loss_mse
+from information_hydrology.utils.loss_fn import loss_mse
 from information_hydrology.utils.miscellaneous import (
     dump_config,
     seconds_to_time,
