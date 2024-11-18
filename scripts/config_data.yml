@@ -5,17 +5,17 @@
 # dev_mode: True
 
 # files to specify training, validation and test basins (relative to code root or absolute path)
-train_basin_file: data/basin_ids/basins_camels_us_5.txt
+train_basin_file: data/basin_ids/basins_camels_us_10.txt
 validation_basin_file: data/basin_ids/basins_camels_us_5.txt
-test_basin_file: data/basin_ids/basins_camels_us_5.txt
+test_basin_file: data/basin_ids/basins_camels_us_10.txt
 
 # training, validation and test time periods (format = 'dd/mm/yyyy')
-train_start_date: "01/10/1999"
-train_end_date: "30/09/2008"
-validation_start_date: "01/10/1980"
-validation_end_date: "30/09/1989"
-test_start_date: "01/10/1989"
-test_end_date: "30/09/1999"
+train_start_date: "01/10/1980"
+train_end_date: "30/09/1990"
+validation_start_date: "01/10/1990"
+validation_end_date: "30/09/1995"
+test_start_date: "01/10/1995"
+test_end_date: "30/09/2005"
 
 # which GPU (id) to use [in format of cuda:0, cuda:1 etc, or cpu or None]
 # device: cpu
@@ -45,22 +45,26 @@ num_workers: 8
 dataset: camels_us
 
 # Path to data set root
-data_dir: ../CAMELS-US
+data_dir: ../CAMELS_US
 
 # Forcing product [daymet, maurer, maurer_extended, nldas, nldas_extended, nldas_hourly]
 # can be either a list of forcings or a single forcing product
 forcings:
 - daymet
+- maurer
+- nldas
 
 # variables to use as time series input (names match the data file column headers)
 # Note: In case of multiple input forcing products, you have to append the forcing product behind
 # each variable. E.g. 'prcp(mm/day)' of the daymet product is 'prcp(mm/day)_daymet'
 dynamic_inputs:
-- prcp(mm/day)
-- srad(W/m2)
-- tmax(C)
-- tmin(C)
-- vp(Pa)
+- PRCP(mm/day)_nldas
+- PRCP(mm/day)_maurer
+- prcp(mm/day)_daymet
+- srad(W/m2)_daymet
+- tmax(C)_daymet
+- tmin(C)_daymet
+- vp(Pa)_daymet
 
 # which columns to use as target
 target_variables:
