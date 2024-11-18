@@ -7,8 +7,8 @@ import torch
 import xarray as xr
 import yaml
 from information_hydrology.modelzoo.cudalstm import CudaLSTM
-from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from information_hydrology.modelzoo.lstmgmm import LSTMGMM
+from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from neuralhydrology.datasetzoo import get_dataset
 from neuralhydrology.utils.config import Config
 from torch.utils.data import DataLoader
@@ -119,10 +119,10 @@ y_hat = np.stack(([out[basin]["y_hat"] for basin in basins]), axis=0)
 
 ds = xr.Dataset(
     data_vars={
-        "y_obs": (("basin", "time"), y_obs),
-        "y_hat": (("basin", "sample", "time"), y_hat),
+        "y_obs": (("basin", "date"), y_obs),
+        "y_hat": (("basin", "sample", "date"), y_hat),
     },
-    coords={"time": dates, "basin": basins},
+    coords={"date": dates, "basin": basins},
 )
 
 ds.to_netcdf(path_run.parent / f"res_{experiment_name}.nc")
