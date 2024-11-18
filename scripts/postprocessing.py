@@ -8,6 +8,7 @@ import xarray as xr
 import yaml
 from information_hydrology.modelzoo.cudalstm import CudaLSTM
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
+from information_hydrology.modelzoo.lstmgmm import LSTMGMM
 from neuralhydrology.datasetzoo import get_dataset
 from neuralhydrology.utils.config import Config
 from torch.utils.data import DataLoader
@@ -43,8 +44,14 @@ match model_name:
             model = VLSTM(num_inputs, num_hidden, error=ErrorMode.ADDITIVE)
         elif config["error"] == "proportional":
             model = VLSTM(num_inputs, num_hidden, error=ErrorMode.PROPORTIONAL)
+    case "LSTM-GMM":
+        num_inputs = config["num_inputs"]
+        num_hidden = config["num_hidden"]
+        num_gaussians = config["num_gaussians"]
+        num_samples = 1_000
+        model = LSTMGMM(num_inputs, num_hidden, num_gaussians)
     case _:    
-        raise ValueError(f"Model {model} not recognized")
+        raise ValueError(f"Model {model_name} not recognized")
 
 model.load_state_dict(torch.load(list(path_run.glob("*.pt"))[-1], map_location=device, weights_only=False))
 model.to(device)
@@ -87,13 +94,15 @@ for basin in tqdm(basins, ascii=True):
                 pred = model(x)
             case "vLSTM":
                 pred = model.sample(x, num_samples, mode=SamplingMode.STANDARD, track_grad=False)
+            case "LSTM-GMM":
+                pred = model.sample(x, num_samples)
         
         dates.append(date[:, -1])
         y_obs.append(y[:, -1, 0].detach().clone().numpy())
         y_hat.append(pred.detach().cpu().clone().numpy())
         del x_d, y, date, x_s, x, pred
     
-    if model_name != "CudaLSTM":
+    if model_name == "vLSTM":
         y_hat = [array[:, :, 0] for array in y_hat]
         
     out[basin] = {
