@@ -3,7 +3,7 @@ from torch import nn
 
 
 class LSTMGMM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_gaussians):
+    def __init__(self, input_size, hidden_size, num_gaussians, output_dropout):
         super(LSTMGMM, self).__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -20,12 +20,14 @@ class LSTMGMM(nn.Module):
             nn.Linear(hidden_size, num_gaussians),
             nn.Softmax(dim=1),
         )
+        self.dropout = nn.Dropout(output_dropout)
 
         self._reset_parameters()
 
     def forward(self, x):
         _, (h_n, _) = self.lstm(x)
         out = h_n[-1]
+        out = self.dropout(out)
         mu = self.fc_mu(out)
         sigma = torch.exp(self.fc_sigma(out))
         w = self.seq_w(out)
