@@ -13,7 +13,12 @@ class ErrorMode(Enum):
     ADDITIVE = 2
 
 class VLSTM(nn.Module):
-    def __init__(self, num_input, num_hidden, error=ErrorMode.PROPORTIONAL):
+    def __init__(self,
+                 num_input: int,
+                 num_hidden: int,
+                 output_dropout: float,
+                 error: ErrorMode = ErrorMode.PROPORTIONAL,            
+    ):
         super().__init__()
         """
         Variational LSTM (VLSTM) model.
@@ -26,13 +31,19 @@ class VLSTM(nn.Module):
                 Number of hidden units in the LSTM
             error : ErrorMode
                 Error mode for the VLSTM model (see 'decode')
+            output_dropout : float
+                Dropout rate for the output of the encoder
         """
         self.input_size = num_input
         self.hidden_size = num_hidden
         self.error = error
+        self.output_dropout = output_dropout
 
-        # Encoder | Decoder
+        # Encoder
         self.encoder = nn.LSTM(input_size=num_input, hidden_size=num_hidden, batch_first=True)
+        self.dropout = nn.Dropout(output_dropout)
+        
+        # Decoder
         self.decoder = nn.Linear(num_hidden, 1)
         self.eps = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
         self._reset_parameters()
@@ -51,7 +62,7 @@ class VLSTM(nn.Module):
     
     def encode(self, x):
         _, (h_n, _) = self.encoder(x)
-        return h_n[-1] # many-to-one
+        return self.dropout(h_n[-1]) # many-to-one
     
     def decode(self, encoded, z):
         if self.error == ErrorMode.PROPORTIONAL:
