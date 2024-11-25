@@ -34,22 +34,25 @@ match model_name:
     case "CudaLSTM":
         num_inputs = config["num_inputs"]
         num_hidden = config["num_hidden"]
-        model = CudaLSTM(num_inputs, num_hidden)
+        percent_dropout = config["percent_dropout"]
+        model = CudaLSTM(num_inputs, num_hidden, percent_dropout)
         num_samples = 1
     case "vLSTM":
         num_inputs = config["num_inputs"]
         num_hidden = config["num_hidden"]
+        percent_dropout = config["percent_dropout"]
         num_samples = 1_000
         if config["error"] == "additive":
-            model = VLSTM(num_inputs, num_hidden, error=ErrorMode.ADDITIVE)
+            model = VLSTM(num_inputs, num_hidden, percent_dropout, ErrorMode.ADDITIVE)
         elif config["error"] == "proportional":
-            model = VLSTM(num_inputs, num_hidden, error=ErrorMode.PROPORTIONAL)
+            model = VLSTM(num_inputs, num_hidden, percent_dropout, ErrorMode.PROPORTIONAL)
     case "LSTM-GMM":
         num_inputs = config["num_inputs"]
         num_hidden = config["num_hidden"]
         num_gaussians = config["num_gaussians"]
+        percent_dropout = config["percent_dropout"]
         num_samples = 1_000
-        model = LSTMGMM(num_inputs, num_hidden, num_gaussians)
+        model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
     case _:    
         raise ValueError(f"Model {model_name} not recognized")
 
