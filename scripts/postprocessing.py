@@ -14,7 +14,8 @@ from neuralhydrology.utils.config import Config
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-path_run = Path(sys.argv[1])
+path_model_dict = Path(sys.argv[1])
+path_run = path_model_dict.parent
 
 # Set CPU or GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -56,7 +57,7 @@ match model_name:
     case _:    
         raise ValueError(f"Model {model_name} not recognized")
 
-model.load_state_dict(torch.load(list(path_run.glob("*.pt"))[-1], map_location=device, weights_only=False))
+model.load_state_dict(torch.load(path_model_dict, map_location=device, weights_only=False))
 model.to(device)
 model.eval()
 
