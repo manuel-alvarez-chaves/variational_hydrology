@@ -6,7 +6,7 @@ from torch import nn
 
 
 def loss_mse(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-    mask = ~(np.isnan(y) | np.isnan(y_hat))
+    mask = ~(y.isnan() | y_hat.isnan())
     y_hat = y_hat[mask]
     y = y[mask]
     return nn.functional.mse_loss(y_hat, y)
