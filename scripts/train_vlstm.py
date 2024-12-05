@@ -3,9 +3,14 @@ from pathlib import Path
 
 import torch
 import yaml
-from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode
+from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.loss_fn import loss_kld, loss_mse
+from information_hydrology.utils.loss_fn import (
+    loss_kld,
+    loss_mmd,
+    loss_mse,
+    loss_nll,
+)
 from information_hydrology.utils.miscellaneous import (
     dump_config,
     seconds_to_time,
@@ -19,7 +24,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "VLSTM_add_531"
+experiment_name = "VLSTM_MSEMMD0100_016_PRO_60"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -45,15 +50,17 @@ logger.info(f"Using device: {device}")
 
 # Model
 num_inputs = len(config["dynamic_inputs"]) + len(config["static_attributes"])
-num_hidden = 10
-model = VLSTM(num_inputs, num_hidden, ErrorMode.ADDITIVE).to(device)
+num_hidden = 16
+output_dropout = 0.4
+model = VLSTM(num_inputs, num_hidden, output_dropout, ErrorMode.PROPORTIONAL).to(device)
 
 config.update(
     {
         "model": "vLSTM",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
-        "error": "additive",
+        "percent_dropout": output_dropout,
+        "error": "proportional",
     }
 )
 
@@ -87,14 +94,20 @@ x_d, y, date, x_s = sample.values()
 
 # # # # # # # # # # # # # # # PART 03 # # # # # # # # # # # # # # # # #
 
-num_epochs = 60
-num_validate_every = 4
-lrs = [1e-3] * 40 + [1e-4] * 20
-betas = [1e-5] * 10 + [1e-3] * 10 + [2e-3] * 10 + [3e-3] * 10 + [1e-2] * 20
+num_epochs = 40
+num_validate_every = 2
+num_samples = 100
+
+lrs = [1e-3] * 30 + [1e-4] * 10
+# betas = [1e-5] * 20 + [1e-3] * 10 + [1e-2] * 10 # MSE KLD
+betas = [1e3] * 40 # MSE/NLL MMD
+# betas = [1e-5] * 40 # NLL KLD
+
+dist = torch.distributions.MultivariateNormal(torch.zeros(num_hidden), torch.eye(num_hidden))
 
 logger.info("Training loop")
 time_training = time.time()
-logger.info(f"{'':^5} | {'':^8} | {'':^8} | {'Train Loss':^30} | {'':^8} | {'Val. Loss':^30} | {'':^8}")
+logger.info(f"{'':^5} | {'':^8} | {'':^8} | {'Train Loss':^32} | {'':^8} | {'Val. Loss':^32} | {'':^8}")
 logger.info(f"{'Epoch':^5} | {'LR':^8} | {'Beta':^8} | {'Loss 1':^8} | {'Loss 2':^10} | {'Total':^8} | {'Time':^8} | {'Loss 1':^8} | {'Loss 2':^10} | {'Total':^8} | {'Time':^8}")
 
 for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch"):
@@ -116,9 +129,14 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         # Forward pass
         optimizer.zero_grad()
         _, y_hat, mu, log_var = model(x)
+        # samples = model.sample(x, num_samples, SamplingMode.STANDARD, track_grad=True)
+        samples_z = model.sample_latent(x, num_samples)
         loss_1 = loss_mse(y_hat, y)
-        loss_2 = loss_kld(mu, log_var)
+        # loss_1 = loss_nll(samples, y)
+        # loss_2 = loss_kld(mu, log_var)
+        loss_2 = loss_mmd(samples_z, dist.sample(samples_z.shape[:-1]).requires_grad_(False).to(device))
         loss = loss_1 + betas[epoch] * loss_2
+        # tqdm.write(f"{loss.requires_grad=}")
         loss.backward()
         optimizer.step()
 
@@ -142,7 +160,7 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
     time_train = seconds_to_time(time.time() - time_epoch)
 
     if (epoch + 1) % num_validate_every != 0:
-        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {betas[epoch]:^8.1e} | {loss_train_1:^8.4f} | {loss_train_2:^10.4f} | {loss_train_total:^8.4f} | {time_train:^8} | {'':^8} | {'':^10} | {'':^8} | {'':^8}")
+        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {betas[epoch]:^8.1e} | {loss_train_1:^8.4f} | {loss_train_2:^10.3e} | {loss_train_total:^8.4f} | {time_train:^8} | {'':^8} | {'':^10} | {'':^8} | {'':^8}")
         continue
 
     # Start validation
@@ -159,8 +177,12 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
 
         # Forward pass
         _, y_hat, mu, log_var = model(x)
+        # samples = model.sample(x, num_samples, SamplingMode.STANDARD, track_grad=True)
+        samples_z = model.sample_latent(x, num_samples)
         loss_1 = loss_mse(y_hat, y)
-        loss_2 = loss_kld(mu, log_var)
+        # loss_1 = loss_nll(samples, y)
+        # loss_2 = loss_kld(mu, log_var)
+        loss_2 = loss_mmd(samples_z, dist.sample(samples_z.shape[:-1]).requires_grad_(False).to(device))
         if loss_1.isnan() or loss_2.isnan():
             continue
         loss = loss_1 + betas[epoch] * loss_2
@@ -179,7 +201,7 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
 
     # Print report
     time_val = seconds_to_time(time.time() - time_epoch)
-    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {betas[epoch]:^8.1e} | {loss_train_1:^8.4f} | {loss_train_2:^10.4f} | {loss_train_total:^8.4f} | {time_train:^8} | {loss_val_1:^8.4f} | {loss_val_2:^10.4f} | {loss_val_total:^8.4f} | {time_val:^8}")
+    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {betas[epoch]:^8.1e} | {loss_train_1:^8.4f} | {loss_train_2:^10.3e} | {loss_train_total:^8.4f} | {time_train:^8} | {loss_val_1:^8.4f} | {loss_val_2:^10.3e} | {loss_val_total:^8.4f} | {time_val:^8}")
 
 # Print final report
 time_training = time.time() - time_training

@@ -19,7 +19,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "LSTMGMM_10_3_5"
+experiment_name = "LSTMGMM_30_3_60"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -45,16 +45,18 @@ logger.info(f"Using device: {device}")
 
 # Model
 num_inputs = len(config["dynamic_inputs"]) + len(config["static_attributes"])
-num_hidden = 10
+num_hidden = 30
 num_gaussians = 3
-model = LSTMGMM(num_inputs, num_hidden, num_gaussians).to(device)
+percent_dropout = 0.4
+model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout).to(device)
 
 config.update(
     {
         "model": "LSTM-GMM",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
-        "num_gaussians": num_gaussians
+        "num_gaussians": num_gaussians,
+        "percent_dropout": percent_dropout,
     }
 )
 
@@ -88,8 +90,8 @@ x_d, y, date, x_s = sample.values()
 
 # # # # # # # # # # # # # # # PART 03 # # # # # # # # # # # # # # # # #
 
-lrs = [1e-3] * 20 + [1e-4] * 20 + [1e-5] * 20
-num_validate_every = 5
+lrs = [1e-3] * 10 + [1e-4] * 20
+num_validate_every = 2
 
 logger.info("Training loop")
 time_training = time.time()
