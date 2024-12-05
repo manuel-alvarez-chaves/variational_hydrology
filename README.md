@@ -5,7 +5,7 @@ A repository for the development of hydrological rainfall-runoff models using In
 ## Installation
 Installation is not so easy because some dependency issues between `numpy`, `numba` and `llvmlite`. My suggestion is to install using `uv` or carefully follow the list of requirements in the `pyproject.toml`.
 
-Here's an example for Windows with the project directory being the current working folder:
+Here's an example with the project directory being the current working folder:
 ```console
 uv sync
 ```
@@ -16,16 +16,18 @@ uv pip install -e ../unite_toolbox
 ```
 Both packages should fulfill the required version in the `pyproject.toml`.
 
-To activate an environment:
-```console
-source .venv/Script/activate # Windows
-source .venv/bin/activate # Linux
-```
-
 ## Usage
 
 In the [examples](./examples/) directory there's an example for how to code a model inside a Jupyer Notebook. Typically a model will get coded before adapting an existing training script in the [scripts](./scripts/) directory to train using an external GPU and more data.
 
+To run a script in Windows:
+
 ```console
+source .venv/Scripts/activate
 python scripts/train_vlstm.py
+```
+In Linux switch *Scripts* for *bin*. Alternatively `uv` can directly run a script:
+
+```console
+uv run scripts/train_vlstm.py
 ```
