@@ -33,3 +33,15 @@ def loss_nll(y_hat: torch.Tensor | Tuple[torch.Tensor], y: torch.Tensor) -> torc
     loss = - torch.log(p + 1e-10)
     loss = torch.mean(loss)
     return loss
+
+def calc_kernel(x, y, sigma=1.0):
+    # Gaussian kernel
+    dist = torch.cdist(x, y, p=2)
+    kernel = torch.exp((-1 * (dist**2)) / (2 * sigma**2))
+    return kernel
+
+def loss_mmd(x, y):
+    x_kernel = calc_kernel(x, x)
+    y_kernel = calc_kernel(y, y)
+    xy_kernel = calc_kernel(x, y)
+    return torch.mean(x_kernel) + torch.mean(y_kernel) - 2 * torch.mean(xy_kernel)

@@ -99,3 +99,11 @@ class VLSTM(nn.Module):
         else:
             with torch.no_grad():
                 return self.generate_samples(x, num_samples, mode)
+            
+    def sample_latent(self, x, num_samples):
+        encoded = self.encode(x)
+        encoded = encoded.unsqueeze(1).repeat(1, num_samples, 1)
+        mu = self.fc_mu(encoded)
+        log_var = self.fc_log_var(encoded)
+        z = self.reparametrize(mu, log_var)
+        return z
