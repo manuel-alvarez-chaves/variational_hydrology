@@ -1,31 +1,30 @@
-[tool.poetry]
+[project]
 name = "information-hydrology"
 version = "0.1.0"
 description = "Library for the development of hydrological rainfall-runoff models using Information Theory."
-authors = ["Manuel Álvarez Chaves <manuel.alvarez-chaves@simtech.uni-stuttgart.de>"]
-license = "GPL-3"
 readme = "README.md"
+authors = [
+    {name = "Manuel Álvarez Chaves", email = "manuel.alvarez-chaves@simtech.uni-stuttgart.de"},
+]
+license = {text = "GPL-3"}
+requires-python = ">=3.10, <4.0"
+dependencies = [
+    "torch>=2.5.1",
+    "numpy==2.0.2",
+    "llvmlite==0.43.0",
+    "numba>=0.60.0",
+    "tqdm>=4.67.1",
+    "xarray[io]>=2024.11.0",
+    "neuralhydrology>=1.11.0",
+    "unite-toolbox>=0.1.9",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-torch = "^2.4.1"
-llvmlite = "^0.43.0"
-numba = "^0.60.0"
-numpy = "2.0.2"
-xarray = {extras = ["io"], version = "^2024.9.0"}
-pandas = "^2.2.3"
-tqdm = "^4.66.5"
-seaborn = "^0.13.2"
-unite-toolbox = {path = "../unite_toolbox-git", develop = true}
-neuralhydrology = {path = "../neuralhydrology", develop = true}
-
-
-[tool.poetry.group.dev.dependencies]
-jupyterlab = "^4.2.5"
-matplotlib = "^3.9.2"
-scipy = "^1.14.1"
-ruff = "^0.7.2"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "ruff>=0.8.1",
+    "scipy>=1.14.1",
+    "pandas>=2.2.3",
+    "jupyterlab>=4.3.2",
+    "matplotlib>=3.9.3",
+    "seaborn>=0.13.2",
+]
