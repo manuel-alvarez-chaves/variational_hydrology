@@ -3,14 +3,9 @@ from pathlib import Path
 
 import torch
 import yaml
-from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
+from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.loss_fn import (
-    loss_kld,
-    loss_mmd,
-    loss_mse,
-    loss_nll,
-)
+from information_hydrology.utils.loss_fn import loss_kld, loss_nll
 from information_hydrology.utils.miscellaneous import (
     dump_config,
     seconds_to_time,
@@ -24,7 +19,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "VLSTM_MSEMMD0100_016_PRO_60"
+experiment_name = "VLSTM_NLLKLD_064_PRO_60"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -50,7 +45,7 @@ logger.info(f"Using device: {device}")
 
 # Model
 num_inputs = len(config["dynamic_inputs"]) + len(config["static_attributes"])
-num_hidden = 16
+num_hidden = 64
 output_dropout = 0.4
 model = VLSTM(num_inputs, num_hidden, output_dropout, ErrorMode.PROPORTIONAL).to(device)
 
@@ -96,14 +91,10 @@ x_d, y, date, x_s = sample.values()
 
 num_epochs = 40
 num_validate_every = 2
-num_samples = 100
 
-lrs = [1e-3] * 30 + [1e-4] * 10
-# betas = [1e-5] * 20 + [1e-3] * 10 + [1e-2] * 10 # MSE KLD
-betas = [1e3] * 40 # MSE/NLL MMD
-# betas = [1e-5] * 40 # NLL KLD
+lrs = [1e-3] * 30 + [1e-4] * 10  # NLL KLD
+betas = [1e-5] * 40 # NLL KLD
 
-dist = torch.distributions.MultivariateNormal(torch.zeros(num_hidden), torch.eye(num_hidden))
 
 logger.info("Training loop")
 time_training = time.time()
@@ -128,15 +119,19 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         
         # Forward pass
         optimizer.zero_grad()
-        _, y_hat, mu, log_var = model(x)
-        # samples = model.sample(x, num_samples, SamplingMode.STANDARD, track_grad=True)
-        samples_z = model.sample_latent(x, num_samples)
-        loss_1 = loss_mse(y_hat, y)
-        # loss_1 = loss_nll(samples, y)
-        # loss_2 = loss_kld(mu, log_var)
-        loss_2 = loss_mmd(samples_z, dist.sample(samples_z.shape[:-1]).requires_grad_(False).to(device))
+        hs, _, mu, log_var = model(x)
+        
+        # Model
+        w = model.state_dict()["decoder.weight"]
+        b = model.state_dict()["decoder.bias"]
+        y_mu = hs @ w.T + b
+        y_sigma = torch.sqrt(hs ** 2 @ (w ** 2).T)
+
+        loss_1 = loss_nll((y_mu, y_sigma, torch.ones_like(y_mu)), y)
+        loss_2 = loss_kld(mu, log_var)
+        if loss_1.isnan() or loss_2.isnan():
+            continue
         loss = loss_1 + betas[epoch] * loss_2
-        # tqdm.write(f"{loss.requires_grad=}")
         loss.backward()
         optimizer.step()
 
@@ -145,7 +140,7 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         epoch_total_loss.append(loss.item())
 
         # Delete
-        del x_d, y, x_s, x, y_hat, loss
+        del x_d, y, x_s, x, hs, mu, log_var, w, b, y_mu, y_sigma, loss_1, loss_2, loss
 
     # Average loss epoch
     loss_train_1 = sum(epoch_loss_1) / len(epoch_loss_1)
@@ -176,13 +171,13 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         y = y[:, -1, :].to(device)
 
         # Forward pass
-        _, y_hat, mu, log_var = model(x)
-        # samples = model.sample(x, num_samples, SamplingMode.STANDARD, track_grad=True)
-        samples_z = model.sample_latent(x, num_samples)
-        loss_1 = loss_mse(y_hat, y)
-        # loss_1 = loss_nll(samples, y)
-        # loss_2 = loss_kld(mu, log_var)
-        loss_2 = loss_mmd(samples_z, dist.sample(samples_z.shape[:-1]).requires_grad_(False).to(device))
+        hs, _, mu, log_var = model(x)
+        w = model.state_dict()["decoder.weight"]
+        b = model.state_dict()["decoder.bias"]
+        y_mu = hs @ w.T + b
+        y_sigma = torch.sqrt(hs ** 2 @ (w ** 2).T)
+        loss_1 = loss_nll((y_mu, y_sigma, torch.ones_like(y_mu)), y)
+        loss_2 = loss_kld(mu, log_var)
         if loss_1.isnan() or loss_2.isnan():
             continue
         loss = loss_1 + betas[epoch] * loss_2
@@ -192,7 +187,7 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
         epoch_total_loss.append(loss.item())
 
         # Delete
-        del x_d, y, x_s, x, y_hat, loss
+        del x_d, y, x_s, x, hs, mu, log_var, w, b, y_mu, y_sigma, loss_1, loss_2, loss
 
     # Average loss epoch
     loss_val_1 = sum(epoch_loss_1) / len(epoch_loss_1)
