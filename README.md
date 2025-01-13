@@ -5,7 +5,7 @@ A repository for the development of hydrological rainfall-runoff models using In
 ## Installation
 Installation is not so easy because some dependency issues between `numpy`, `numba` and `llvmlite`. My suggestion is to install using [uv](https://docs.astral.sh/uv/) or carefully follow the list of requirements in the `pyproject.toml`.
 
-Here's an example with the project directory being the current working folder:
+Here's the command to install using `uv` with the project directory being the current working folder:
 ```console
 uv sync
 ```
