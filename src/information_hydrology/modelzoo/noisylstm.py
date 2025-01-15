@@ -20,7 +20,7 @@ class NoisyLSTM(nn.Module):
         _, (h_n, _) = self.lstm(x)
         encoded = self.dropout(h_n[-1])
         encoded = encoded.unsqueeze(1).repeat(1, num_samples, 1)
-        noise = self.m.sample((x.size(0), num_samples))
+        noise = self.m.sample((x.size(0), num_samples)).to(x.device)
         return self.linear(encoded * (1 + noise))
 
     def _reset_parameters(self):
