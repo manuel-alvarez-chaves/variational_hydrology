@@ -9,9 +9,9 @@ Here's the command to install using `uv` with the project directory being the cu
 ```console
 uv sync
 ```
-This project also benefits of having local copies of `neuralhydrology` and `unite_toolbox`. If these projects are at the same level of the `information_hydrology` directory, they can be installed as editable packages using:
+This project also benefits of having local copies of `Hy2DL` and `unite_toolbox`. If these projects are at the same level of the `information_hydrology` directory, they can be installed as editable packages using:
 ```console
-uv pip install -e ../neuralhydrology
+uv pip install -e ../Hy2DL
 uv pip install -e ../unite_toolbox
 ```
 Both packages should fulfill the required version in the `pyproject.toml`.
