@@ -25,9 +25,9 @@ dev = [
     "ruff>=0.8.1",
     "scipy>=1.14.1",
     "pandas>=2.2.3",
-    "jupyterlab>=4.3.2",
     "matplotlib>=3.9.3",
     "seaborn>=0.13.2",
+    "ipykernel>=6.29.5",
 ]
 
 [build-system]
