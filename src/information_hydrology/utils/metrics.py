@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def calculate_cdf(metric: list):
+def calc_cdf(metric: list):
     metric = np.array(metric)
     metric = metric[~np.isnan(metric)]
 
@@ -13,3 +13,6 @@ def calculate_cdf(metric: list):
     # auc = np.trapezoid(y, x)
 
     return {"x": x, "y": y, "median": median, "auc": auc}
+
+def calc_nse(obs: np.array, sim: np.array):
+    return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
