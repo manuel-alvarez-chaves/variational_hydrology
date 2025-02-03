@@ -1,72 +1,39 @@
-# --- Experiment configurations --------------------------------------------------------------------
+# DATA
 
-# experiment name, used as folder name
-# experiment_name: minimal_config
-# dev_mode: True
+batch_size: 256
+sequence_length: 365
 
-# files to specify training, validation and test basins (relative to code root or absolute path)
 train_basin_file: data/basin_ids/basins_camels_us_5.txt
 validation_basin_file: data/basin_ids/basins_camels_us_5.txt
 test_basin_file: data/basin_ids/basins_camels_us_5.txt
 
-# training, validation and test time periods (format = 'dd/mm/yyyy')
-train_start_date: "01/10/1980"
-train_end_date: "30/09/1990"
-validation_start_date: "01/10/1990"
-validation_end_date: "30/09/1995"
-test_start_date: "01/10/1995"
-test_end_date: "30/09/2005"
-
-# which GPU (id) to use [in format of cuda:0, cuda:1 etc, or cpu or None]
-# device: cpu
-
-# --- Training configuration -----------------------------------------------------------------------
-
-# specify loss [MSE, NSE, RMSE]
-loss: MSE
-
-# Mini-batch size
-batch_size: 256
-
-# Defines which time steps are used to calculate the loss. Can't be larger than seq_length.
-# If use_frequencies is used, this needs to be a dict mapping each frequency to a predict_last_n-value, else an int.
-predict_last_n: 1
-
-# Length of the input sequence
-# If use_frequencies is used, this needs to be a dict mapping each frequency to a seq_length, else an int.
-seq_length: 365
-
-# Number of parallel workers used in the data pipeline
-num_workers: 8
-
-# --- Data configurations --------------------------------------------------------------------------
-
-# which data set to use [camels_us, camels_gb, global, hourly_camels_us]
 dataset: camels_us
-
-# Path to data set root
 data_dir: ../CAMELS-US
 
-# Forcing product [daymet, maurer, maurer_extended, nldas, nldas_extended, nldas_hourly]
-# can be either a list of forcings or a single forcing product
+train_period: 
+- "1999-10-01"
+- "2008-09-30"
+validation_period:
+- "1980-10-01"
+- "1989-09-30"
+test_period:
+- "1989-10-01"
+- "1999-09-30"
+
 forcings:
 - daymet
-- maurer
 - nldas
+- maurer
 
-# variables to use as time series input (names match the data file column headers)
-# Note: In case of multiple input forcing products, you have to append the forcing product behind
-# each variable. E.g. 'prcp(mm/day)' of the daymet product is 'prcp(mm/day)_daymet'
 dynamic_inputs:
+- prcp(mm/day)_daymet
 - PRCP(mm/day)_nldas
 - PRCP(mm/day)_maurer
-- prcp(mm/day)_daymet
 - srad(W/m2)_daymet
 - tmax(C)_daymet
 - tmin(C)_daymet
 - vp(Pa)_daymet
 
-# which columns to use as target
 target_variables:
 - QObs(mm/d)
 

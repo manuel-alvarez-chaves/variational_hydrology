@@ -41,8 +41,3 @@ def set_seed(seed: int | None) -> int:
     torch.cuda.manual_seed(seed)
     torch.manual_seed(seed)
     return seed
-
-def dump_config(config: dict, path: str) -> None:
-    config["train_dir"] = str(config["train_dir"].as_posix())
-    with Path.open(path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
