@@ -1,18 +1,14 @@
+import pickle
 import time
 from pathlib import Path
 
 import torch
 import yaml
-from information_hydrology.modelzoo.cudalstm import CudaLSTM
+from hy2dl.aux_functions.functions_training import nse_basin_averaged
+from hy2dl.datasetzoo.camelsus import CAMELS_US
+from hy2dl.modelzoo.cudalstm import CudaLSTM
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.loss_fn import loss_mse
-from information_hydrology.utils.miscellaneous import (
-    dump_config,
-    seconds_to_time,
-    set_seed,
-)
-from neuralhydrology.datasetzoo import get_dataset
-from neuralhydrology.utils.config import Config
+from information_hydrology.utils.miscellaneous import seconds_to_time, set_seed
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
@@ -23,10 +19,9 @@ experiment_name = "LSTM_531"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
-# NeuralHydrology onfig file for data
+# Read config
 path_config = Path("scripts/config_data.yml")
-config = yaml.safe_load(Path.open(path_config, "r"))
-config.update({"train_dir": path_save_folder})
+config_data = yaml.safe_load(path_config.read_text())
 
 # Logger
 path_logger = path_save_folder / "run.log"
@@ -44,79 +39,120 @@ logger.info(f"Using device: {device}")
 # # # # # # # # # # # # # # # PART 01 # # # # # # # # # # # # # # # # #
 
 # Model
-num_inputs = len(config["dynamic_inputs"]) + len(config["static_attributes"])
-num_hidden = 10
-model = CudaLSTM(num_inputs, num_hidden).to(device)
+num_inputs = len(config_data["dynamic_inputs"]) + len(config_data["static_attributes"])
+num_hidden = 64
+output_dropout = 0.4
+config_model = {
+        "model": "LSTM",
+        "input_size_lstm": num_inputs,
+        "hidden_size": num_hidden,
+        "no_of_layers": 1,
+        "predict_last_n": 1,
+        "dropout_rate": output_dropout,
+        "out_features": 1,
+}
 
-config.update(
-    {
-        "model": "CudaLSTM",
-        "num_inputs": num_inputs,
-        "num_hidden": num_hidden,
-    }
-)
+model = CudaLSTM(config_model).to(device)
 
-# Dump config as YAML
-logger.info(f"Model: {config['model']}")
-dump_config(config, path_save_folder / "config.yml")
+logger.info(f"Model: {config_model['model']}")
+
+# Dump config
+config = {
+    "experiment": experiment_name,
+    "seed": seed,
+    "data": config_data,
+    "model": config_model,
+}
+with Path.open(path_save_folder / "config.yml", "w") as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 # # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # ## # #
 
-# Dataset and Loader
-config = Config(config, dev_mode=True)
-
 # Training
-ds_train = get_dataset(cfg=config, is_train=True, period="train")
-dl_train = DataLoader(ds_train, batch_size=config.batch_size, shuffle=True, collate_fn=ds_train.collate_fn)
-logger.info(f"Batches in training: {len(dl_train)}")
+ds_train = CAMELS_US(
+    dynamic_input=config_data["dynamic_inputs"],
+    forcing=config_data["forcings"],
+    target=config_data["target_variables"],
+    sequence_length=config_data["sequence_length"],
+    time_period=config_data["train_period"],
+    path_data=config_data["data_dir"],
+    path_entities=config_data["train_basin_file"],
+    check_NaN=True,
+    static_input=config_data["static_attributes"],
+)
+
+# Standardize data and save scaler
+ds_train.calculate_basin_std()
+ds_train.calculate_global_statistics(path_save_scaler=str(path_save_folder.resolve()))
+ds_train.standardize_data(standardize_output=False)
+
+dl_train = DataLoader(
+    ds_train,
+    batch_size=config_data["batch_size"],
+    shuffle=True,
+    drop_last=True,
+    collate_fn=ds_train.collate_fn,
+)
 
 # Validation
-ds_val = get_dataset(cfg=config, is_train=False, period="validation")
-dl_val = DataLoader(ds_val, batch_size=config.batch_size, shuffle=False, collate_fn=ds_val.collate_fn)
-logger.info(f"Batches in validation: {len(dl_val)}")
+ds_val = CAMELS_US(
+    dynamic_input=config_data["dynamic_inputs"],
+    forcing=config_data["forcings"],
+    target=config_data["target_variables"],
+    sequence_length=config_data["sequence_length"],
+    time_period=config_data["train_period"],
+    path_data=config_data["data_dir"],
+    path_entities=config_data["train_basin_file"],
+    check_NaN=True,
+    static_input=config_data["static_attributes"],
+)
 
-# Items
-sample = next(iter(dl_train))
+# Standardize data using the saved training scaler
+ds_val.calculate_basin_std()
+with Path.open(path_save_folder / "scaler.pickle", "rb") as f:
+    ds_val.scaler = pickle.load(f)
+ds_val.standardize_data(standardize_output=False)
 
-logger.info("Input data keys:")
-for k, v in sample.items():
-    logger.info(f"{k}: {v.shape}")
-
-x_d, y, date, x_s = sample.values()
+dl_val = DataLoader(
+    ds_val,
+    batch_size=config_data["batch_size"],
+    shuffle=True,
+    drop_last=True,
+    collate_fn=ds_val.collate_fn,
+)
 
 # # # # # # # # # # # # # # # PART 03 # # # # # # # # # # # # # # # # #
 
-num_epochs = 10
-num_validate_every = 5
+num_epochs = 2
+num_validate_every = 2
+
+lrs = [1e-3] * 10 + [1e-4] * 20
 
 logger.info("Training loop")
 time_training = time.time()
 logger.info(f"{'Epoch':<5} | {'Train Loss':<10} | {'Time':<8} | {'Val. Loss':<10} | {'Time':<8}")
 
-optimizer = torch.optim.Adam(model.parameters())
 for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch"):
+    optimizer = torch.optim.Adam(model.parameters(), lr=lrs[epoch])
+
     # Training
     time_epoch = time.time()
     epoch_loss = []
 
     model.train()
     for sample in tqdm(dl_train, desc="Training", ncols=79, ascii=True, unit="batch", position=1):
-        # Fix inputs
-        x_d, y, _, x_s = sample.values()
-        x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
-        x = torch.cat([x_d, x_s], dim=-1).to(device)
-        y = y[:, -1, :].to(device)
+        _, _, y, basin_std, _, _ = sample.values()
         
         # Forward pass
         optimizer.zero_grad()
-        y_hat = model(x)
-        loss = loss_mse(y_hat, y)
+        y_hat = model(sample)["y_hat"]
+        loss = nse_basin_averaged(y_hat, y, basin_std)
         loss.backward()
         optimizer.step()
         epoch_loss.append(loss.item())
 
         # Delete
-        del x_d, y, x_s, x, y_hat, loss
+        del sample, y, y_hat, loss
 
     # Average loss epoch
     epoch_average_loss = sum(epoch_loss) / len(epoch_loss)
@@ -142,21 +178,18 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
 
     model.eval()
     for sample in tqdm(dl_val, desc="Validation", ncols=79, ascii=True, unit="batch", position=1):
-        # Fix inputs
-        x_d, y, _, x_s = sample.values()
-        x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
-        x = torch.cat([x_d, x_s], dim=-1).to(device)
-        y = y[:, -1, :].to(device)
-
+        _, _, y, basin_std, _, _ = sample.values()
+        
         # Forward pass
-        y_hat = model(x)
-        loss = loss_mse(y_hat, y)
+        optimizer.zero_grad()
+        y_hat = model(sample)["y_hat"]
+        loss = nse_basin_averaged(y_hat, y, basin_std)
         if loss.isnan():
             continue
         epoch_loss.append(loss.item())
 
         # Delete
-        del x_d, y, x_s, x, y_hat, loss
+        del sample, y, y_hat, loss
 
     # Average loss epoch
     epoch_average_loss = sum(epoch_loss) / len(epoch_loss)

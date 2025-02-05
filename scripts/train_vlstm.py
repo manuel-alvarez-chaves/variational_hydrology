@@ -8,18 +8,14 @@ from hy2dl.datasetzoo.camelsus import CAMELS_US
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from information_hydrology.utils.logging import get_logger
 from information_hydrology.utils.loss_fn import loss_kld, loss_nll
-from information_hydrology.utils.miscellaneous import (
-    dump_config,
-    seconds_to_time,
-    set_seed,
-)
+from information_hydrology.utils.miscellaneous import seconds_to_time, set_seed
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "DUMMY" # "VLSTM_NLLKLD_064_PRO_60"
+experiment_name = "VLSTM_NLLKLD_064_PRO_60"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -64,7 +60,7 @@ config = {
     "data": config_data,
     "model": config_model,
 }
-with Path.open(path_save_folder, "w") as f:
+with Path.open(path_save_folder / "config.yml", "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
 # # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # ## # #
