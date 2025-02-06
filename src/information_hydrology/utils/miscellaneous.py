@@ -1,10 +1,7 @@
 import random
-from pathlib import Path
 
 import numpy as np
 import torch
-import yaml
-
 
 def seconds_to_time(elapsed_time: float) -> str:
     """Format seconds to time as %H:%M:%S.

@@ -11,9 +11,6 @@ class TqdmHandler(logging.StreamHandler):
     specifically designed for tqdm.
     """
 
-    # def __init__(self) -> None:
-    #     logging.StreamHandler.__init__(self)  # noqa: ERA001
-
     def emit(self, record: str) -> None:
         """Emit the log record.
 
