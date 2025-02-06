@@ -128,6 +128,7 @@ def loss_kld(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
     torch.Tensor
         The computed KLD loss.
     """
+    mu, logvar = _mask(mu, logvar)
     return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 
 def loss_mse(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
