@@ -9,11 +9,9 @@ class Period(Enum):
     VALIDATION = "validation"
     
 def get_dataset(config: dict, period: Period = Period.TRAINING) -> Dataset:
-    validate_data = False
     match period:
         case Period.TRAINING:
             period = config["train_period"]
-            validate_data = True
         case Period.VALIDATION:
             period = config["validation_period"]
 
@@ -25,7 +23,7 @@ def get_dataset(config: dict, period: Period = Period.TRAINING) -> Dataset:
         time_period=period,
         path_data=config["data_dir"],
         path_entities=config["train_basin_file"],
-        check_NaN=validate_data,
+        check_NaN=True,
         static_input=config["static_attributes"],
     )
     return ds
