@@ -28,15 +28,15 @@ for basin in tqdm(basin_ids, ascii=True):
 
     # Metrics
     metrics[experiment_name][basin] = {}
-    metrics[experiment_name][basin]["NSE"] = calc_metrics.nse(data.y_obs, data.y_hat.mean(dim='sample'))
-    metrics[experiment_name][basin]["KGE"] = calc_metrics.kge(data.y_obs, data.y_hat.mean(dim='sample'))
-    metrics[experiment_name][basin]["KGE"] = calc_metrics.kge(data.y_obs, data.y_hat.mean(dim='sample'))
-    metrics[experiment_name][basin]["CORR"] = calc_metrics.pearsonr(data.y_obs, data.y_hat.mean(dim='sample'))
-    metrics[experiment_name][basin]["a_NSE"] = calc_metrics.alpha_nse(data.y_obs, data.y_hat.mean(dim='sample'))
-    metrics[experiment_name][basin]["b_NSE"] = calc_metrics.beta_nse(data.y_obs, data.y_hat.mean(dim='sample'))
-    # metrics[experiment_name][basin]["FHV"] = calc_metrics.fdc_fhv(data.y_obs, data.y_hat.mean(dim='sample'))
-    # metrics[experiment_name][basin]["FLV"] = calc_metrics.fdc_flv(data.y_obs, data.y_hat.mean(dim='sample'))
-    # metrics[experiment_name][basin]["FMS"] = calc_metrics.fdc_fms(data.y_obs, data.y_hat.mean(dim='sample'))
+    metrics[experiment_name][basin]["NSE"] = calc_metrics.nse(data.y_obs, data.y_hat.mean(dim='samples'))
+    metrics[experiment_name][basin]["KGE"] = calc_metrics.kge(data.y_obs, data.y_hat.mean(dim='samples'))
+    metrics[experiment_name][basin]["KGE"] = calc_metrics.kge(data.y_obs, data.y_hat.mean(dim='samples'))
+    metrics[experiment_name][basin]["CORR"] = calc_metrics.pearsonr(data.y_obs, data.y_hat.mean(dim='samples'))
+    metrics[experiment_name][basin]["a_NSE"] = calc_metrics.alpha_nse(data.y_obs, data.y_hat.mean(dim='samples'))
+    metrics[experiment_name][basin]["b_NSE"] = calc_metrics.beta_nse(data.y_obs, data.y_hat.mean(dim='samples'))
+    # metrics[experiment_name][basin]["FHV"] = calc_metrics.fdc_fhv(data.y_obs, data.y_hat.mean(dim='samples'))
+    # metrics[experiment_name][basin]["FLV"] = calc_metrics.fdc_flv(data.y_obs, data.y_hat.mean(dim='samples'))
+    # metrics[experiment_name][basin]["FMS"] = calc_metrics.fdc_fms(data.y_obs, data.y_hat.mean(dim='samples'))
 
 with Path.open(path_metrics, "w") as f:
     json.dump(metrics, f, indent=4)
