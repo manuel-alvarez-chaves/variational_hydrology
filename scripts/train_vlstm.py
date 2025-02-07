@@ -44,7 +44,7 @@ num_hidden = 64
 output_dropout = 0.4
 model = VLSTM(num_inputs, num_hidden, output_dropout, ErrorMode.PROPORTIONAL).to(device)
 config_model = {
-        "model": "vLSTM",
+        "name": "vLSTM",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
         "percent_dropout": output_dropout,
@@ -114,7 +114,7 @@ def training_loop(epoch: int, period: str):
     time_epoch = time.time()
     epoch_loss_1, epoch_loss_2, epoch_total_loss = [], [], []
     for sample in tqdm(loader, desc=misc["desc"], ncols=79, ascii=True, unit="batch", position=1):
-         # Fix inputs
+        # Fix inputs
         x_d, x_s, y, _, _, _ = sample.values()
         x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
         x = torch.cat([x_d, x_s], dim=-1).to(device)

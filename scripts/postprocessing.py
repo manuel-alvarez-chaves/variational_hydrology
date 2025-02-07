@@ -1,3 +1,4 @@
+import pickle
 import sys
 from pathlib import Path
 
@@ -6,12 +7,8 @@ import pandas as pd
 import torch
 import xarray as xr
 import yaml
-from information_hydrology.modelzoo.cudalstm import CudaLSTM
-from information_hydrology.modelzoo.lstmgmm import LSTMGMM
-from information_hydrology.modelzoo.noisylstm import NoisyLSTM
+from hy2dl.datasetzoo.camelsus import CAMELS_US
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
-from neuralhydrology.datasetzoo import get_dataset
-from neuralhydrology.utils.config import Config
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -26,40 +23,20 @@ with Path.open(path_run / "config.yml", "r") as f:
     config = yaml.load(f, Loader=yaml.Loader)
 
 # Experiment name
-idx_name = path_run.name.find("2025") if path_run.name.find("2024") == -1 else path_run.name.find("2024")
-experiment_name = path_run.name[:idx_name - 1]
+experiment_name = config["experiment"]
 
 # Load model
-model_name = config["model"]
+model_name = config["model"]["name"]
 match model_name:
-    case "CudaLSTM":
-        num_inputs = config["num_inputs"]
-        num_hidden = config["num_hidden"]
-        percent_dropout = config["percent_dropout"]
-        model = CudaLSTM(num_inputs, num_hidden, percent_dropout)
-        num_samples = 1
     case "vLSTM":
-        num_inputs = config["num_inputs"]
-        num_hidden = config["num_hidden"]
-        percent_dropout = config["percent_dropout"]
+        num_inputs = config["model"]["num_inputs"]
+        num_hidden = config["model"]["num_hidden"]
+        percent_dropout = config["model"]["percent_dropout"]
         num_samples = 1_000
-        if config["error"] == "additive":
-            model = VLSTM(num_inputs, num_hidden, percent_dropout, ErrorMode.ADDITIVE)
-        elif config["error"] == "proportional":
-            model = VLSTM(num_inputs, num_hidden, percent_dropout, ErrorMode.PROPORTIONAL)
-    case "LSTM-GMM":
-        num_inputs = config["num_inputs"]
-        num_hidden = config["num_hidden"]
-        num_gaussians = config["num_gaussians"]
-        percent_dropout = config["percent_dropout"]
-        num_samples = 1_000
-        model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
-    case "NoisyLSTM":
-        num_inputs = config["num_inputs"]
-        num_hidden = config["num_hidden"]
-        percent_dropout = config["percent_dropout"]
-        num_samples = 1_000
-        model = NoisyLSTM(num_inputs, num_hidden, percent_dropout)
+        match config["model"]["error"]:
+            case "proportional":
+                error_mode = ErrorMode.PROPORTIONAL
+        model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode)
     case _:    
         raise ValueError(f"Model {model_name} not recognized")
 
@@ -70,72 +47,73 @@ model.eval()
 # Load data
 
 # Dates
-date_initial = config["test_start_date"]
-date_final = config["test_end_date"]
+date_initial, date_final = config["data"]["test_period"]
 dates = pd.date_range(date_initial, date_final, freq="D")
 
 # Basins
-path_test_basins = Path(config["test_basin_file"])
+path_test_basins = Path(config["data"]["test_basin_file"])
 with path_test_basins.open("r") as f:
     basins = [basin.rstrip() for basin in f]
 
-with Path.open(path_run / "train_data_scaler.yml", "r") as f:
-    scaler_train = yaml.safe_load(f)
-
-# Dataset
-# The train dataset has to be loaded... NH bug?
-config = Config(config, dev_mode=True)
-ds_train = get_dataset(cfg=config, is_train=True, period="train")
+# Scaler
+with Path.open(path_run / "scaler.pickle", "rb") as f:
+    scaler = pickle.load(f)
 
 out = {}
 for basin in tqdm(basins, ascii=True):
-    # Test dataset and laoder
-    ds_test = get_dataset(cfg=config, is_train=False, period="test", basin=basin)
-    loader = DataLoader(ds_test, batch_size=256, shuffle=False, collate_fn=ds_test.collate_fn)
+    # One dataset per basin
+    ds = CAMELS_US(
+        dynamic_input=config["data"]["dynamic_inputs"],
+        forcing=config["data"]["forcings"],
+        target=config["data"]["target_variables"],
+        sequence_length=config["data"]["sequence_length"],
+        time_period=config["data"]["test_period"],
+        path_data=config["data"]["data_dir"],
+        entity=basin,
+        check_NaN=False,
+        static_input=config["data"]["static_attributes"],
+    )
+    ds.scaler = scaler
+    ds.standardize_data(standardize_output=False)
+
+    loader = DataLoader(ds, batch_size=256, shuffle=False, collate_fn=ds.collate_fn)
     
     dates, y_obs, y_hat = [], [], []
     for sample in loader:
-        x_d, y, date, x_s = sample.values()
+        # Fix inputs
+        x_d, x_s, y, _, date = sample.values()
         x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
         x = torch.cat([x_d, x_s], dim=-1).to(device)
+        y = y[:, -1, :].to(device)
 
         match model_name:
-            case "CudaLSTM":
-                pred = model(x)
             case "vLSTM":
-                pred = model.sample(x, num_samples, mode=SamplingMode.STANDARD, track_grad=False)
-            case "LSTM-GMM":
-                pred = model.sample(x, num_samples)
-            case "NoisyLSTM":
-                pred = model(x, num_samples)
+                pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False)
         
-        dates.append(date[:, -1])
-        y_obs.append(y[:, -1, 0].detach().clone().numpy())
-        y_hat.append(pred.detach().cpu().clone().numpy())
-        del x_d, y, date, x_s, x, pred
+        dates.append(date) # list of num_batches
+        y_obs.append(y.detach().clone().numpy()[:, 0]) # [batch_size, num_targets]
+        y_hat.append(pred.detach().cpu().clone().numpy()[:, :, 0]) # [batch_size, num_samples, num_targets]
+        del x_d, x_s, y, date, x, pred
     
-    if model_name in ["vLSTM", "NoisyLSTM"]:
-        y_hat = [array[:, :, 0] for array in y_hat]
-        
+      
     out[basin] = {
         "dates": np.concatenate(dates),
         "y_obs": np.concatenate(y_obs),
-        "y_hat": np.concatenate(y_hat).T,
+        "y_hat": np.concatenate(y_hat),
     }
     del dates, y_obs, y_hat
 
 # Reshape results
-dates = out[basins[0]]["dates"]
+dates = out[basins[0]]["dates"].flatten()
 y_obs = np.stack(([out[basin]["y_obs"] for basin in basins]), axis=0)
 y_hat = np.stack(([out[basin]["y_hat"] for basin in basins]), axis=0)
 
 ds = xr.Dataset(
     data_vars={
         "y_obs": (("basin", "date"), y_obs),
-        "y_hat": (("basin", "sample", "date"), y_hat),
+        "y_hat": (("basin", "date", "samples"), y_hat),
     },
     coords={"date": dates, "basin": basins},
 )
 
 ds.to_netcdf(path_run.parent / f"res_{experiment_name}.nc")
-

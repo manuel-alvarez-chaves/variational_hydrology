@@ -7,7 +7,6 @@ from torch.utils.data import Dataset
 class Period(Enum):
     TRAINING = "training"
     VALIDATION = "validation"
-    TESTING = "testing"
     
 def get_dataset(config: dict, period: Period = Period.TRAINING) -> Dataset:
     validate_data = False
@@ -17,8 +16,6 @@ def get_dataset(config: dict, period: Period = Period.TRAINING) -> Dataset:
             validate_data = True
         case Period.VALIDATION:
             period = config["validation_period"]
-        case Period.TESTING:
-            period = config["test_period"]
 
     ds = CAMELS_US(
         dynamic_input=config["dynamic_inputs"],
