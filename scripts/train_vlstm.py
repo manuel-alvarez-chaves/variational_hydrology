@@ -15,7 +15,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
 
 # General config
-experiment_name = "VLSTM_NLLKLD_064_PRO_60"
+experiment_name = "VLSTM_NLLKLD_064_STDRD_PRO_60"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -51,7 +51,7 @@ config_model = {
         "error": "proportional",
     }
 
-logger.info(f"Model: {config_model['model']}")
+logger.info(f"Model: {config_model['name']}")
 
 # Dump config
 config = {
@@ -125,7 +125,7 @@ def training_loop(epoch: int, period: str):
             optimizer.zero_grad()
 
         _, _, mu, log_var = model(x)
-        samples = model.sample(x, 1000, SamplingMode.LEARNED, track_grad=misc["track_grad"])
+        samples = model.sample(x, 1000, SamplingMode.STANDARD, track_grad=misc["track_grad"])
 
         loss_1 = loss_nll(samples, y)
         loss_2 = loss_kld(mu, log_var)
@@ -154,13 +154,13 @@ def training_loop(epoch: int, period: str):
 
     return loss_1, loss_2, loss_total, time_epoch
 
-# # # # # # # # # # # # # # # PART 03 # # # # # # # # # # # # # # # # #
+# # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
 
 num_epochs = 2
 num_validate_every = 2
 
-lrs = [1e-3] * 30 + [1e-4] * 10  # NLL KLD
-betas = [0] * 40 # NLL KLD
+lrs = [1e-3] * 30 + [1e-4] * 10
+betas = [1e-3] * 30 + [1e-2] * 10
 
 logger.info("Training loop")
 time_training = time.time()

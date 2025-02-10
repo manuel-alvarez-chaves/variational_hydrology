@@ -4,11 +4,11 @@ from pathlib import Path
 
 import torch
 import yaml
-from hy2dl.datasetzoo.camelsus import CAMELS_US
 from information_hydrology.modelzoo.noisylstm import NoisyLSTM
 from information_hydrology.utils.logging import get_logger
 from information_hydrology.utils.loss_fn import loss_nll
 from information_hydrology.utils.miscellaneous import seconds_to_time, set_seed
+from information_hydrology.utils.training import Period, get_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
@@ -43,7 +43,6 @@ num_inputs = len(config_data["dynamic_inputs"]) + len(config_data["static_attrib
 num_hidden = 64
 output_dropout = 0.4
 model = NoisyLSTM(num_inputs, num_hidden, output_dropout).to(device)
-
 config_model = {
         "model": "NoisyLSTM",
         "num_inputs": num_inputs,
@@ -67,19 +66,7 @@ with Path.open(path_save_folder / "config.yml", "w") as f:
 # # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # ## # #
 
 # Training
-ds_train = CAMELS_US(
-    dynamic_input=config_data["dynamic_inputs"],
-    forcing=config_data["forcings"],
-    target=config_data["target_variables"],
-    sequence_length=config_data["sequence_length"],
-    time_period=config_data["train_period"],
-    path_data=config_data["data_dir"],
-    path_entities=config_data["train_basin_file"],
-    check_NaN=True,
-    static_input=config_data["static_attributes"],
-)
-
-# Standardize data and save scaler
+ds_train = get_dataset(config_data, Period.TRAINING)
 ds_train.calculate_basin_std()
 ds_train.calculate_global_statistics(path_save_scaler=str(path_save_folder.resolve()))
 ds_train.standardize_data(standardize_output=False)
@@ -93,17 +80,7 @@ dl_train = DataLoader(
 )
 
 # Validation
-ds_val = CAMELS_US(
-    dynamic_input=config_data["dynamic_inputs"],
-    forcing=config_data["forcings"],
-    target=config_data["target_variables"],
-    sequence_length=config_data["sequence_length"],
-    time_period=config_data["train_period"],
-    path_data=config_data["data_dir"],
-    path_entities=config_data["train_basin_file"],
-    check_NaN=True,
-    static_input=config_data["static_attributes"],
-)
+ds_val = get_dataset(config_data, Period.VALIDATION)
 
 # Standardize data using the saved training scaler
 ds_val.calculate_basin_std()
@@ -121,6 +98,56 @@ dl_val = DataLoader(
 
 # # # # # # # # # # # # # # # PART 03 # # # # # # # # # # # # # # # # #
 
+# Custom training/validation loop
+
+def training_loop(epoch: int, period: str):
+    if period == "train":
+        optimizer = torch.optim.Adam(model.parameters(), lr=lrs[epoch])
+        loader = dl_train
+        model.train()
+        misc = {"desc": "Training", "track_grad": True}
+    else:
+         loader = dl_val
+         model.eval()
+         misc = {"desc": "Validation", "track_grad": False}
+    
+    time_epoch = time.time()
+    epoch_loss = []
+    for sample in tqdm(loader, desc=misc["desc"], ncols=79, ascii=True, unit="batch", position=1):
+        # Fix inputs
+        x_d, x_s, y, _, _, _ = sample.values()
+        x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
+        x = torch.cat([x_d, x_s], dim=-1).to(device)
+        y = y[:, -1, :].to(device)
+
+        # Forward pass
+        if period == "train":
+            optimizer.zero_grad()
+
+        y_hat = model(x, 1000)
+        loss = loss_nll(y_hat, y)
+
+        if period == "train":
+            loss.backward()
+            optimizer.step()
+
+        epoch_loss.append(loss.item())
+
+        del x_d, y, x_s, x, loss
+    
+    # Average loss epoch
+    loss = sum(epoch_loss) / len(epoch_loss)
+
+    if period == "train":
+        path_save_model = path_save_folder / f"model_epoch_{(epoch + 1):02d}.pt"
+        torch.save(model.state_dict(), path_save_model)
+
+    time_epoch = seconds_to_time(time.time() - time_epoch)
+
+    return loss, time_epoch
+
+# # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
+
 num_epochs = 2
 num_validate_every = 2
 
@@ -128,84 +155,19 @@ lrs = [1e-3] * 40
 
 logger.info("Training loop")
 time_training = time.time()
-logger.info(f"{'Epoch':<5} | {'Train Loss':<10} | {'Time':<8} | {'Val. Loss':<10} | {'Time':<8}")
+logger.info(f"{'Epoch':^5} | {'LR':^8} | {'Train Loss':^8} | {'Time':^8} | {'Val. Loss':^8} | {'Time':^8}")
 
+time_training = time.time()
 for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch"):
-    # Change LR at every epoch
-    optimizer = torch.optim.Adam(model.parameters(), lr=lrs[epoch])
-
-    # Training
-    time_epoch = time.time()
-    epoch_loss = []
-
-    model.train()
-    for sample in tqdm(dl_train, desc="Training", ncols=79, ascii=True, unit="batch", position=1):
-        # Fix inputs
-        x_d, x_s, y, _, _, _ = sample.values()
-        x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
-        x = torch.cat([x_d, x_s], dim=-1).to(device)
-        y = y[:, -1, :].to(device)
-        
-        # Forward pass
-        optimizer.zero_grad()
-        y_hat = model(x, 1_000)
-        loss = loss_nll(y_hat, y)
-        loss.backward()
-        optimizer.step()
-        epoch_loss.append(loss.item())
-
-        # Delete
-        del x_d, y, x_s, x, y_hat, loss
-
-    # Average loss epoch
-    epoch_average_loss = sum(epoch_loss) / len(epoch_loss)
-
-    # Save model
-    path_save_model = path_save_folder / f"model_epoch_{(epoch + 1):02d}.pt"
-    torch.save(model.state_dict(), path_save_model)
-
-    # Save time
-    time_epoch = time.time() - time_epoch
-
+    # Train
+    loss_train, time_train = training_loop(epoch, "train")
     if (epoch + 1) % num_validate_every != 0:
-        logger.info(f"{epoch + 1:<5} | {epoch_average_loss:<10.5f} | {seconds_to_time(time_epoch)} | {'':<10} | {'':<10}")
+        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^9.4f} | {time_train:^8} | {'':^8} | {'':^8}")
         continue
+    # Validate
+    loss_val, time_val = training_loop(epoch, "validate")
+    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^9.4f} | {time_train:^8} | {loss_val:^9.4f} | {time_val:^8}")
 
-    # Save from training
-    train_loss = epoch_average_loss
-    train_time = time_epoch
-
-    # Start validation
-    time_epoch = time.time()
-    epoch_loss = []
-
-    model.eval()
-    for sample in tqdm(dl_val, desc="Validation", ncols=79, ascii=True, unit="batch", position=1):
-        # Fix inputs
-        x_d, x_s, y, _, _, _ = sample.values()
-        x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
-        x = torch.cat([x_d, x_s], dim=-1).to(device)
-        y = y[:, -1, :].to(device)
-
-        # Forward pass
-        y_hat = model(x, 1000)
-        loss = loss_nll(y_hat, y)
-        if loss.isnan():
-            continue
-        epoch_loss.append(loss.item())
-
-        # Delete
-        del x_d, y, x_s, x, y_hat, loss
-
-    # Average loss epoch
-    epoch_average_loss = sum(epoch_loss) / len(epoch_loss)
-
-    # Print report
-    time_epoch = time.time() - time_epoch
-    logger.info(f"{epoch + 1:<5} | {train_loss:<10.5f} | {seconds_to_time(train_time)} | {epoch_average_loss:<10.5f} | {seconds_to_time(time_epoch)}")
-
-# Print final report
 time_training = time.time() - time_training
 logger.info("Run completed successfully")
 logger.info(f"Total run time: {seconds_to_time(time_training)}")
-
