@@ -3,6 +3,8 @@ notebooks/
 experiments/*
 !experiments/.gitkeep
 dashboard/*.ipynb
+do_runs.sh
+scripts/*/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
