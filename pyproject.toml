@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     {name = "Manuel Álvarez Chaves", email = "manuel.alvarez-chaves@simtech.uni-stuttgart.de"},
 ]
-license = {text = "GPL-3"}
+license = {text = "MIT"}
 requires-python = ">=3.10, <4.0"
 dependencies = [
     "torch>=2.5.1",
