@@ -3,6 +3,8 @@ from typing import Tuple
 
 import numpy as np
 import torch
+from scipy.spatial import KDTree
+from scipy.special import gamma
 from torch import nn
 
 
@@ -78,7 +80,7 @@ def loss_nll(
     Parameters
     ----------
     y_hat : torch.Tensor or Tuple[torch.Tensor]
-        Predicted values. If a tuple, it should contain momentas and weights.
+        Predicted values. If a tuple, it should contain moments and weights.
     y : torch.Tensor
         Ground truth values.
     dist : Distribution, optional
@@ -100,9 +102,9 @@ def loss_nll(
             p = -0.5 * p.pow(2)
             p = p.exp() / (sigma * np.sqrt(2 * np.pi))
         case Distribution.EXPONENTIAL:
-            gamma = 1 / sigma
-            p = -gamma * y
-            p = gamma * p.exp()        
+            lmbda = 1 / sigma
+            p = -lmbda * max(y, 0.0)
+            p = lmbda * p.exp()
     
     p = (p * w).sum(dim=-1)
     loss = - torch.log(p + 1e-10)
@@ -150,6 +152,70 @@ def loss_mse(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     y_hat, y = _mask(y_hat, y)
     return nn.functional.mse_loss(y_hat, y)
 
+def vol_lp_unit_ball(d: int, p: float):
+    """Calculate the volume of a d-dimensional unit ball.
+    
+    Parameters
+    ----------
+    d : int
+        Dimension of the unit ball
+    p : float
+        Norm of the unit ball
+    """
+    a = (2 * gamma(1 / p + 1)) ** d
+    b = gamma(d / p + 1)
+    return a / b
 
+class Lookup(Enum):
+    """Enum class for different lookup methods.
 
+    TREE: Use KDTree for batch wise nearest neighbor lookup
+    NAIVE: Naive implementation of nearest neighbor lookup
+    """
+    TREE = "tree"
+    NAIVE = "naive"
 
+def loss_nll_knn(x: torch.Tensor, data: torch.Tensor, k: int = 5, p_norm: float = 2, mode: Lookup = Lookup.NAIVE):
+    """Calculates the negative log-likelihood loss using k-nearest neighbors
+    (*k*-NN).
+
+    Calculates the negative log-likelihood loss using k-NN to approximate the
+    likelihood of the query point *x* given the data points *data*. This
+    approximation is based on distance and was proposed by Wang et al. (2019).
+    10.1109/TIT.2009.2016060
+
+    Parameters
+    ----------
+    x : torch.Tensor (num_batches x num_dim)
+        The query point.
+    data : torch.Tensor (num_batches x num_samples x num_dim)
+        The data points.
+
+    Returns
+    -------
+    torch.Tensor
+        The computed negative log-likelihood loss.
+    """
+    x, data = _mask(x, data)
+    num_batches, num_samples, num_dim = data.shape
+    
+    vol = vol_lp_unit_ball(num_dim, p_norm)
+
+    match mode:
+        case Lookup.TREE:
+            # Batch wise lookup for nearest neighbor
+            radius = torch.empty(num_batches)
+            for idx in range(num_batches):
+                kd_tree = KDTree(data[idx, :, :].detach().numpy())
+                _, idy = kd_tree.query(x[idx, :].detach().numpy(), k=k, p=p_norm)
+                radius[idx] = (data[idx, idy[-1], :] - x).norm(p=p_norm)
+        case Lookup.NAIVE:
+            # Calculate distances between x and all data points, pick the k smallest
+            x = x.unsqueeze(1).expand(-1, num_samples, -1)
+            dist = (data - x).norm(p=p_norm, dim=2)
+            radius = dist.topk(k, dim=1, largest=False).values[:, -1]
+
+    # Calculate density
+    p = (k / (num_samples - 1)) * (1 / (vol * radius))
+    loss = -torch.log(p + 1e-10).mean()
+    return loss
