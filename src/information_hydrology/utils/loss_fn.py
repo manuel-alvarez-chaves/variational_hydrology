@@ -3,9 +3,9 @@ from typing import Tuple
 
 import numpy as np
 import torch
-from scipy.spatial import KDTree
 from scipy.special import gamma
 from torch import nn
+from torchkde import KernelDensity
 
 
 def _calc_moments(y_hat: torch.Tensor | Tuple[torch.Tensor]):
@@ -103,8 +103,9 @@ def loss_nll(
             p = p.exp() / (sigma * np.sqrt(2 * np.pi))
         case Distribution.EXPONENTIAL:
             lmbda = 1 / sigma
-            p = -lmbda * max(y, 0.0)
+            p = lmbda * (y - mu).abs()
             p = lmbda * p.exp()
+            # p = torch.where(p >= lmbda, torch.zeros_like(p), p)
     
     p = (p * w).sum(dim=-1)
     loss = - torch.log(p + 1e-10)
@@ -166,56 +167,57 @@ def vol_lp_unit_ball(d: int, p: float):
     b = gamma(d / p + 1)
     return a / b
 
-class Lookup(Enum):
-    """Enum class for different lookup methods.
-
-    TREE: Use KDTree for batch wise nearest neighbor lookup
-    NAIVE: Naive implementation of nearest neighbor lookup
-    """
-    TREE = "tree"
-    NAIVE = "naive"
-
-def loss_nll_knn(x: torch.Tensor, data: torch.Tensor, k: int = 5, p_norm: float = 2, mode: Lookup = Lookup.NAIVE):
+def loss_nll_knn(y_hat: torch.Tensor, y: torch.Tensor, k: int = 5, p_norm: float = 2):
     """Calculates the negative log-likelihood loss using k-nearest neighbors
     (*k*-NN).
 
     Calculates the negative log-likelihood loss using k-NN to approximate the
-    likelihood of the query point *x* given the data points *data*. This
+    likelihood of the query point *y* given the data points *y_hat*. This
     approximation is based on distance and was proposed by Wang et al. (2019).
     10.1109/TIT.2009.2016060
 
     Parameters
     ----------
-    x : torch.Tensor (num_batches x num_dim)
-        The query point.
-    data : torch.Tensor (num_batches x num_samples x num_dim)
+    y_hat : torch.Tensor (num_batches x num_samples x num_dim)
         The data points.
+    y : torch.Tensor (num_batches x num_dim)
+        The query point.
+    k : int
+        Number of neighbors to calculate.
+    p_norm : float
+        Norm to calculate distance (p_norm = 1, 2, ..., np.inf)
 
     Returns
     -------
     torch.Tensor
         The computed negative log-likelihood loss.
     """
-    x, data = _mask(x, data)
-    num_batches, num_samples, num_dim = data.shape
+    y_hat, y = _mask(y_hat, y)
+    _, num_samples, num_dim = y_hat.shape
     
     vol = vol_lp_unit_ball(num_dim, p_norm)
 
-    match mode:
-        case Lookup.TREE:
-            # Batch wise lookup for nearest neighbor
-            radius = torch.empty(num_batches)
-            for idx in range(num_batches):
-                kd_tree = KDTree(data[idx, :, :].detach().numpy())
-                _, idy = kd_tree.query(x[idx, :].detach().numpy(), k=k, p=p_norm)
-                radius[idx] = (data[idx, idy[-1], :] - x).norm(p=p_norm)
-        case Lookup.NAIVE:
-            # Calculate distances between x and all data points, pick the k smallest
-            x = x.unsqueeze(1).expand(-1, num_samples, -1)
-            dist = (data - x).norm(p=p_norm, dim=2)
-            radius = dist.topk(k, dim=1, largest=False).values[:, -1]
+    # Calculate distances between x and all y_hat points, pick the k smallest
+    y = y.unsqueeze(1).expand(-1, num_samples, -1)
+    dist = (y_hat - y).norm(p=p_norm, dim=2)
+    radius = dist.topk(k, dim=1, largest=False).values[:, -1]
 
     # Calculate density
     p = (k / (num_samples - 1)) * (1 / (vol * radius))
     loss = -torch.log(p + 1e-10).mean()
+    return loss
+
+def loss_nll_kde(y_hat, y):
+    # y_hat [num_batches, num_samples, num_dim]
+    # y [num_batches, num_dim]
+    y_hat, y = _mask(y_hat, y)
+    num_batches, num_samples, num_dim = y_hat.shape
+
+    logprob = []
+    for idx in range(num_batches):
+        kde = KernelDensity(bandwidth="silverman", kernel="gaussian")
+        _ = kde.fit(y_hat[idx])
+        logprob.append(kde.score_samples(y[idx]))
+    logprob = torch.stack(logprob)
+    loss = -logprob.mean()
     return loss
