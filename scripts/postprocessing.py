@@ -8,6 +8,7 @@ import torch
 import xarray as xr
 import yaml
 from hy2dl.datasetzoo.camelsus import CAMELS_US
+from information_hydrology.modelzoo.lstmgmm import LSTMGMM
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -27,16 +28,21 @@ experiment_name = config["experiment"]
 
 # Load model
 model_name = config["model"]["name"]
+num_inputs = config["model"]["num_inputs"]
+num_hidden = config["model"]["num_hidden"]
+percent_dropout = config["model"]["percent_dropout"]
+num_samples = 1_000
 match model_name:
     case "vLSTM":
-        num_inputs = config["model"]["num_inputs"]
-        num_hidden = config["model"]["num_hidden"]
-        percent_dropout = config["model"]["percent_dropout"]
-        num_samples = 1_000
         match config["model"]["error"]:
             case "proportional":
                 error_mode = ErrorMode.PROPORTIONAL
+            case "exponential":
+                error_mode = ErrorMode.EXPONENTIAL
         model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode)
+    case "LSTM-GMM":
+        num_gaussians = config["model"]["num_gaussians"]
+        model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
     case _:    
         raise ValueError(f"Model {model_name} not recognized")
 
@@ -89,10 +95,14 @@ for basin in tqdm(basins, ascii=True):
         match model_name:
             case "vLSTM":
                 pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False)
+                y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples, num_targets]
+            case "LSTM-GMM":
+                pred = model.sample(x, num_samples)
+                y_hat_sample = pred.detach().cpu().clone().numpy() # [batch_size, num_samples]
         
         dates.append(date) # list of num_batches
-        y_obs.append(y.detach().clone().numpy()[:, 0]) # [batch_size, num_targets]
-        y_hat.append(pred.detach().cpu().clone().numpy()[:, :, 0]) # [batch_size, num_samples, num_targets]
+        y_obs.append(y.detach().cpu().clone().numpy()[:, 0]) # [batch_size, num_targets]
+        y_hat.append(y_hat_sample)
         del x_d, x_s, y, date, x, pred
     
       
