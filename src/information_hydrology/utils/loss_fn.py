@@ -172,9 +172,9 @@ def loss_nll_knn(y_hat: torch.Tensor, y: torch.Tensor, k: int = 5, p_norm: float
     (*k*-NN).
 
     Calculates the negative log-likelihood loss using k-NN to approximate the
-    likelihood of the query point *y* given the data points *y_hat*. This
-    approximation is based on distance and was proposed by Wang et al. (2019).
-    10.1109/TIT.2009.2016060
+    likelihood of the observed point *y* given the predicted points *y_hat*.
+    This approximation is based on distance and was proposed by Wang et al.
+    (2019). 10.1109/TIT.2009.2016060
 
     Parameters
     ----------
@@ -207,11 +207,62 @@ def loss_nll_knn(y_hat: torch.Tensor, y: torch.Tensor, k: int = 5, p_norm: float
     loss = -torch.log(p + 1e-10).mean()
     return loss
 
-def loss_nll_kde(y_hat, y):
-    # y_hat [num_batches, num_samples, num_dim]
-    # y [num_batches, num_dim]
+def loss_nll_norm(y_hat, y, p_norm=2):
+    """Calculates the negative log-likelihood loss using the norm.
+
+    Calculates the distance between the observed point *y* and the predicted
+    and the predicted points *y_hat* using the norm *p_norm*. Log-likelihood
+    is calculated as an approximation based on the calculated distance and the
+    volume of the unit ball.
+
+    Parameters
+    ----------
+    y_hat : torch.Tensor (num_batches x num_samples x num_dim)
+        The predicted data points.
+    y : torch.Tensor (num_batches x num_dim)
+        The observed point.
+    p_norm : float
+        Norm to calculate distance (p_norm = 1, 2, ..., np.inf)
+
+    Returns
+    -------
+    torch.Tensor
+        The computed negative log-likelihood loss.
+    """
     y_hat, y = _mask(y_hat, y)
-    num_batches, num_samples, num_dim = y_hat.shape
+    _, num_samples, num_dim = y_hat.shape
+
+    vol = vol_lp_unit_ball(num_dim, p_norm)
+
+    y = y.unsqueeze(1).expand(-1, num_samples, -1)
+    dist = (y_hat - y).norm(p=p_norm, dim=2)
+
+    p = (1 / (vol * dist))
+    loss = -torch.log(p + 1e-10).mean()
+    return loss
+
+def loss_nll_kde(y_hat, y):
+    """Calculates the negative log-likelihood loss using kernel density
+    estimation (KDE).
+
+    For each batch in the sample, creates a KDE distribution using the
+    predicted points *y_hat* to evaluate the density of *y*. This density is
+    used to approximate the negative log-likelihood loss.
+
+    Parameters
+    ----------
+    y_hat : torch.Tensor (num_batches x num_samples x num_dim)
+        The predicted data points.
+    y : torch.Tensor (num_batches x num_dim)
+        The observed point.
+
+    Returns
+    -------
+    torch.Tensor
+        The computed negative log-likelihood loss.
+    """
+    y_hat, y = _mask(y_hat, y)
+    num_batches, _, _ = y_hat.shape
 
     logprob = []
     for idx in range(num_batches):
