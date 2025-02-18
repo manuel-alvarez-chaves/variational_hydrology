@@ -3,9 +3,9 @@
 batch_size: 256
 sequence_length: 365
 
-train_basin_file: data/basin_ids/basins_camels_us_60.txt
-validation_basin_file: data/basin_ids/basins_camels_us_60.txt
-test_basin_file: data/basin_ids/basins_camels_us_60.txt
+train_basin_file: data/basin_ids/basins_camels_us_5.txt
+validation_basin_file: data/basin_ids/basins_camels_us_5.txt
+test_basin_file: data/basin_ids/basins_camels_us_5.txt
 
 dataset: camels_us
 data_dir: ../CAMELS-US

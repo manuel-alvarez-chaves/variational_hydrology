@@ -2,20 +2,27 @@ import pickle
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 import yaml
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from information_hydrology.utils.logging import get_logger
-from information_hydrology.utils.loss_fn import loss_kld, loss_nll
+from information_hydrology.utils.loss_fn import (
+        loss_kld,
+        loss_nll,
+        loss_nll_kde,
+        loss_nll_knn,
+        loss_nll_norm,
+)
 from information_hydrology.utils.miscellaneous import seconds_to_time, set_seed
 from information_hydrology.utils.training import Period, get_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-# # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
+# # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "VLSTM_NLLKLD_064_STDRD_PRO_60"
+experiment_name = "VLSTM_NLL-NORM-1-KLD_064_LEARN_PRO_60"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -63,7 +70,7 @@ config = {
 with Path.open(path_save_folder / "config.yml", "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
-# # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # ## # #
+# # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # # # # #
 
 # Training
 ds_train = get_dataset(config_data, Period.TRAINING)
@@ -124,11 +131,11 @@ def training_loop(epoch: int, period: str):
         if period == "train":
             optimizer.zero_grad()
 
-        _, _, mu, log_var = model(x)
-        samples = model.sample(x, 1000, SamplingMode.STANDARD, track_grad=misc["track_grad"])
+        _, _, logvar = model(x)
+        samples = model.sample(x, 1000, SamplingMode.LEARNED, track_grad=misc["track_grad"])
 
-        loss_1 = loss_nll(samples, y)
-        loss_2 = loss_kld(mu, log_var)
+        loss_1 = loss_nll_norm(samples, y, p_norm=1)
+        loss_2 = loss_kld(logvar)
         loss = loss_1 + betas[epoch] * loss_2
 
         if period == "train":
@@ -139,7 +146,7 @@ def training_loop(epoch: int, period: str):
         epoch_loss_2.append(loss_2.item())
         epoch_total_loss.append(loss.item())
 
-        del x_d, y, x_s, x, mu, log_var, loss_1, loss_2, loss
+        del x_d, y, x_s, x, logvar, loss_1, loss_2, loss
     
     # Average loss epoch
     loss_1 = sum(epoch_loss_1) / len(epoch_loss_1)
@@ -156,7 +163,7 @@ def training_loop(epoch: int, period: str):
 
 # # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
 
-num_epochs = 2
+num_epochs = 40
 num_validate_every = 2
 
 lrs = [1e-3] * 30 + [1e-4] * 10
