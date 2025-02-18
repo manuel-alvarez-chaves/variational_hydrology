@@ -6,11 +6,13 @@ from torch.distributions.multivariate_normal import MultivariateNormal
 
 
 class SamplingMode(Enum):
-    STANDARD = 1
-    LEARNED = 2
+    STANDARD = "standard"
+    LEARNED = "learned"
 
 class ErrorMode(Enum):
-    PROPORTIONAL = 1
+    PROPORTIONAL = "proportional"
+    EXPONENTIAL = "exponential"
+    DENSE = "dense"
 
 class VLSTM(nn.Module):
     def __init__(self,
@@ -53,10 +55,14 @@ class VLSTM(nn.Module):
         self.fc_log_var = nn.Linear(num_hidden, num_hidden)
         self.m = MultivariateNormal(torch.zeros(num_hidden), torch.eye(num_hidden))
 
+        # Dense layer for Error Mode
+        if self.error == ErrorMode.DENSE:
+            self.dense = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
+
     def _reset_parameters(self):
         self.encoder.bias_hh_l0.data[self.hidden_size:2 * self.hidden_size] = 3.0
     
-    def reparametrize(self, mu, log_var):
+    def _reparametrize(self, mu, log_var):
         std = torch.exp(0.5 * log_var)
         eps = torch.randn_like(std).requires_grad_(False)
         return mu + eps * std
@@ -69,14 +75,16 @@ class VLSTM(nn.Module):
         match self.error:
             case ErrorMode.PROPORTIONAL:
                 return self.decoder(encoded * (1 + z))
-            case _:
-                raise ValueError("Invalid Error Mode")
+            case ErrorMode.EXPONENTIAL:
+                return self.decoder(encoded * (1 + z.exp()))
+            case ErrorMode.DENSE:
+                return self.decoder(encoded * (1 + self.dense(z)))
     
     def forward(self, x):
         encoded = self.encode(x)
         mu = self.fc_mu(encoded)
         log_var = self.fc_log_var(encoded)
-        z = self.reparametrize(mu, log_var)
+        z = self._reparametrize(mu, log_var)
         decoded = self.decode(encoded, z)
         return encoded, decoded, mu, log_var
     
@@ -100,4 +108,3 @@ class VLSTM(nn.Module):
         else:
             with torch.no_grad():
                 return self.generate_samples(x, num_samples, mode)
-            
