@@ -51,8 +51,7 @@ class VLSTM(nn.Module):
         self._reset_parameters()
 
         # Variational Inference
-        self.fc_mu = nn.Linear(num_hidden, num_hidden)
-        self.fc_log_var = nn.Linear(num_hidden, num_hidden)
+        self.fc_logvar = nn.Linear(num_hidden, num_hidden)
         self.m = MultivariateNormal(torch.zeros(num_hidden), torch.eye(num_hidden))
 
         # Dense layer for Error Mode
@@ -62,10 +61,10 @@ class VLSTM(nn.Module):
     def _reset_parameters(self):
         self.encoder.bias_hh_l0.data[self.hidden_size:2 * self.hidden_size] = 3.0
     
-    def _reparametrize(self, mu, log_var):
-        std = torch.exp(0.5 * log_var)
+    def _reparametrize(self, logvar):
+        std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std).requires_grad_(False)
-        return mu + eps * std
+        return eps * std
     
     def encode(self, x):
         _, (h_n, _) = self.encoder(x)
@@ -82,11 +81,10 @@ class VLSTM(nn.Module):
     
     def forward(self, x):
         encoded = self.encode(x)
-        mu = self.fc_mu(encoded)
-        log_var = self.fc_log_var(encoded)
-        z = self._reparametrize(mu, log_var)
+        logvar = self.fc_logvar(encoded)
+        z = self._reparametrize(logvar)
         decoded = self.decode(encoded, z)
-        return encoded, decoded, mu, log_var
+        return encoded, decoded, logvar
     
     def generate_samples(self, x, num_samples, mode=SamplingMode.STANDARD):
         num_batches = x.shape[0]
@@ -95,9 +93,8 @@ class VLSTM(nn.Module):
         if mode == SamplingMode.STANDARD:
             z = self.m.sample((num_batches, num_samples)).to(x.device)
         elif mode == SamplingMode.LEARNED:
-            mu = self.fc_mu(encoded)
-            log_var = self.fc_log_var(encoded)
-            z = self.reparametrize(mu, log_var) 
+            logvar = self.fc_logvar(encoded)
+            z = self._reparametrize(logvar) 
         else:
             raise ValueError("Invalid Sampling Mode")
         return self.decode(encoded, z)

@@ -112,7 +112,7 @@ def loss_nll(
     loss = torch.mean(loss)
     return loss
 
-def loss_kld(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+def loss_kld(logvar: torch.Tensor) -> torch.Tensor:
     """
     Calculates de Kullback-Leibler divergence (KLD) loss.
 
@@ -121,8 +121,6 @@ def loss_kld(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
 
     Parameters
     ----------
-    mu : torch.Tensor
-        Predicted mean.
     logvar : torch.Tensor
         Predicted covariance.
 
@@ -131,8 +129,8 @@ def loss_kld(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
     torch.Tensor
         The computed KLD loss.
     """
-    mu, logvar = _mask(mu, logvar)
-    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    logvar = _mask(logvar)[0]
+    return -0.5 * torch.sum(1 + logvar - logvar.exp())
 
 def loss_mse(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """
