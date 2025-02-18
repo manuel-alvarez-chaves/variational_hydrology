@@ -199,12 +199,12 @@ def loss_nll_knn(y_hat: torch.Tensor, y: torch.Tensor, k: int = 5, p_norm: float
 
     # Calculate distances between x and all y_hat points, pick the k smallest
     y = y.unsqueeze(1).expand(-1, num_samples, -1)
-    dist = (y_hat - y).norm(p=p_norm, dim=2)
+    dist = (y_hat - y).norm(p=p_norm, dim=2) + 1e-10
     radius = dist.topk(k, dim=1, largest=False).values[:, -1]
 
     # Calculate density
     p = (k / (num_samples - 1)) * (1 / (vol * radius))
-    loss = -torch.log(p + 1e-10).mean()
+    loss = -torch.log(p).mean()
     return loss
 
 def loss_nll_norm(y_hat, y, p_norm=2):
@@ -235,10 +235,10 @@ def loss_nll_norm(y_hat, y, p_norm=2):
     vol = vol_lp_unit_ball(num_dim, p_norm)
 
     y = y.unsqueeze(1).expand(-1, num_samples, -1)
-    dist = (y_hat - y).norm(p=p_norm, dim=2)
+    dist = (y_hat - y).norm(p=p_norm, dim=1) + 1e-10
 
     p = (1 / (vol * dist))
-    loss = -torch.log(p + 1e-10).mean()
+    loss = -torch.log(p).mean()
     return loss
 
 def loss_nll_kde(y_hat, y):
