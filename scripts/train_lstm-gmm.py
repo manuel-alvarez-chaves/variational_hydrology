@@ -131,6 +131,11 @@ def training_loop(epoch: int, period: str):
 
         if period == "train":
             loss.backward()
+            try:
+                torch.nn.utils.clip_grad_norm_(optimizer.param_groups[0]["params"], max_norm=1, error_if_nonfinite=True)
+            except RuntimeError as e:
+                print(f"Error: {e}")
+                continue
             optimizer.step()
 
         epoch_loss.append(loss.item())
