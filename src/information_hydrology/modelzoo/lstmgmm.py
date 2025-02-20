@@ -4,17 +4,27 @@ from torch import nn
 
 class LSTMGMM(nn.Module):
     def __init__(self, input_size, hidden_size, num_gaussians, output_dropout):
-        super(LSTMGMM, self).__init__()
+        super().__init__()
+        """
+        LSTM-based Gaussian Mixture Model (mixed density network).
+        
+        Parameters:
+        -----------
+            input_size : int
+                Number of input features
+            hidden_size : int
+                Number of hidden units in the LSTM
+            num_gaussians : int
+                Number of Gaussian components in the mixture
+            output_dropout : float
+                Dropout rate for the output of the LSTM
+        """
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_gaussians = num_gaussians
 
         self.lstm = nn.LSTM(input_size, hidden_size, batch_first=True)
         self.fc_mu = nn.Linear(hidden_size, num_gaussians)
-        # self.seq_sigma = nn.Sequential(
-        #     nn.Linear(hidden_size, num_gaussians),
-        #     nn.Softplus(),
-        # )
         self.fc_sigma = nn.Linear(hidden_size, num_gaussians)
         self.seq_w = nn.Sequential(
             nn.Linear(hidden_size, num_gaussians),
@@ -26,7 +36,7 @@ class LSTMGMM(nn.Module):
 
     def forward(self, x):
         _, (h_n, _) = self.lstm(x)
-        out = h_n[-1]
+        out = h_n[-1] # many-to-one
         out = self.dropout(out)
         mu = self.fc_mu(out)
         sigma = torch.exp(self.fc_sigma(out))

@@ -12,10 +12,10 @@ from information_hydrology.utils.training import Period, get_dataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
-# # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # ## # #
+# # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "LSTM-GMM_NLL_250_10_531"
+experiment_name = "LSTM-GMM-10_NLL-GAUSS_064_10_060"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -41,19 +41,19 @@ logger.info(f"Using device: {device}")
 
 # Model
 num_inputs = len(config_data["dynamic_inputs"]) + len(config_data["static_attributes"])
-num_hidden = 250
+num_hidden = 64
 num_gaussians = 10
 output_dropout = 0.4
 model = LSTMGMM(num_inputs, num_hidden, num_gaussians, output_dropout).to(device)
 config_model = {
-        "model": "LSTM-GMM",
+        "name": "LSTM-GMM",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
         "percent_dropout": output_dropout,
         "num_gaussians": num_gaussians,
 }
 
-logger.info(f"Model: {config_model['model']}")
+logger.info(f"Model: {config_model['name']}")
 
 # Dump config
 config = {
@@ -65,7 +65,7 @@ config = {
 with Path.open(path_save_folder / "config.yml", "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
-# # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # ## # #
+# # # # # # # # # # # # # # # PART 02 # # # # # # # # # # # # # # # # #
 
 # Training
 ds_train = get_dataset(config_data, Period.TRAINING)
@@ -155,7 +155,7 @@ def training_loop(epoch: int, period: str):
 
 # # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
 
-num_epochs = 40
+num_epochs = 8
 num_validate_every = 2
 
 lrs = [1e-3] * 30 + [1e-4] * 10
@@ -169,11 +169,11 @@ for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch
     # Train
     loss_train, time_train = training_loop(epoch, "train")
     if (epoch + 1) % num_validate_every != 0:
-        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^9.4f} | {time_train:^8} | {'':^8} | {'':^8}")
+        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^10.4f} | {time_train:^8} | {'':^9} | {'':^8}")
         continue
     # Validate
     loss_val, time_val = training_loop(epoch, "validate")
-    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^9.4f} | {time_train:^8} | {loss_val:^9.4f} | {time_val:^8}")
+    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^10.4f} | {time_train:^8} | {loss_val:^9.4f} | {time_val:^8}")
 
 time_training = time.time() - time_training
 logger.info("Run completed successfully")
