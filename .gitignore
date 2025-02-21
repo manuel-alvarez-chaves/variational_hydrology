@@ -5,6 +5,7 @@ experiments/*
 dashboard/*.ipynb
 do_runs.sh
 scripts/*/
+notes/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
