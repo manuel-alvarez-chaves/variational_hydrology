@@ -1,4 +1,5 @@
 import numpy as np
+from unite_toolbox.kde_estimators import calc_kde_density
 
 
 def calc_cdf(metric: list):
@@ -16,3 +17,12 @@ def calc_cdf(metric: list):
 
 def calc_nse(obs: np.array, sim: np.array):
     return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
+
+def calc_kde_loglik(obs, sim):
+    obs, sim = obs.values, sim.values
+    n = len(obs)
+    loglik = np.empty(n)
+    for idx in range(n):
+        p = calc_kde_density(obs[idx].reshape(-1, 1), sim[idx, :].reshape(-1, 1))
+        loglik[idx] = float(np.log(p + 1e-10)[0, 0])
+    return np.mean(loglik)
