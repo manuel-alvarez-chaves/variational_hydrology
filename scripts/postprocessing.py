@@ -39,6 +39,8 @@ match model_name:
                 error_mode = ErrorMode.PROPORTIONAL
             case "exponential":
                 error_mode = ErrorMode.EXPONENTIAL
+            case "dense":
+                error_mode = ErrorMode.DENSE
         model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode)
     case "LSTM-GMM":
         num_gaussians = config["model"]["num_gaussians"]
