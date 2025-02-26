@@ -2,6 +2,17 @@ import numpy as np
 from unite_toolbox.kde_estimators import calc_kde_density
 
 
+def _mask(*arrays: np.array) -> np.array:
+    masks = []
+    for array in arrays:
+        num_dim = array.ndim
+        for _ in range(num_dim - 1):
+            array = array.sum(axis=1)
+        mask = ~np.isnan(array)
+        masks.append(mask)
+    mask = np.stack(masks, axis=1).all(axis=1)
+    return tuple(array[mask] for array in arrays)
+
 def calc_cdf(metric: list):
     metric = np.array(metric)
     metric = metric[~np.isnan(metric)]
@@ -19,7 +30,7 @@ def calc_nse(obs: np.array, sim: np.array):
     return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
 
 def calc_kde_loglik(obs, sim):
-    obs, sim = obs.values, sim.values
+    obs, sim = _mask(obs.values, sim.values)
     n = len(obs)
     loglik = np.empty(n)
     for idx in range(n):
