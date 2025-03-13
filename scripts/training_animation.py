@@ -9,6 +9,7 @@ import yaml
 from hy2dl.datasetzoo.camelsus import CAMELS_US
 from information_hydrology.modelzoo.lstmgmm import LSTMGMM
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
+from information_hydrology.utils.metrics import calc_kde_loglik, calc_nse
 from matplotlib.animation import FuncAnimation
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -76,14 +77,16 @@ for idx, sample in enumerate(loader):
     if idx == 2:
         break
 
-x_d, x_s, y, _, dates = sample.values()
+x_d, x_s, y, basin, dates = sample.values()
 dates = dates.flatten()
 x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
 x = torch.cat([x_d, x_s], dim=-1)
-y = y[:, -1, :]
+y = y[:, -1, :].flatten().detach().numpy()
 
+tqdm.write(f"Basin: {basin[0]}")
+tqdm.write(f"Dates: {dates[0]} - {dates[-1]}")
 # Iterate over models
-medians, lowers, uppers = [], [], []
+medians, lowers, uppers, nses, logliks = [], [], [], [], []
 for path_model in tqdm(path_models, ascii=True):
     model.load_state_dict(torch.load(path_model, map_location="cpu", weights_only=False))
     model.eval()
@@ -99,6 +102,9 @@ for path_model in tqdm(path_models, ascii=True):
     medians.append(np.median(y_hat_sample, axis=1))
     lowers.append(np.quantile(y_hat_sample, 0.05, axis=1))
     uppers.append(np.quantile(y_hat_sample, 0.95, axis=1))
+    nses.append(calc_nse(y, np.mean(y_hat_sample, axis=1)))
+    logliks.append(calc_kde_loglik(y, y_hat_sample))
+    
 
 epochs = [i + 1 for i in range(len(medians))]
 for _ in range(20):
@@ -106,13 +112,15 @@ for _ in range(20):
     medians.append(medians[-1])
     lowers.append(lowers[-1])
     uppers.append(uppers[-1])
+    nses.append(nses[-1])
+    logliks.append(logliks[-1])
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # Make animation
 fig, ax = plt.subplots(figsize=(10, 5))
 
-observed_line, = ax.plot(dates, y.detach().cpu().numpy(), label="Observed")
+observed_line, = ax.plot(dates, y, label="Observed")
 median_line, = ax.plot([], [], label=f"{experiment_name}", color="tab:green")
 fill_between = ax.fill_between(dates, lowers[0], uppers[0], alpha=0.3, label="Prediction CI [5%, 95%]", color="tab:green")
 title = ax.text(0.5, 1.05, "", transform=ax.transAxes, ha="center")
@@ -132,7 +140,7 @@ def update(frame):
 
     ax.fill_between(dates, lowers[frame], uppers[frame], alpha=0.3, label="Prediction CI [5%, 95%]", color="tab:green")
 
-    title.set_text(f"Epoch: {epochs[frame]}")
+    title.set_text(f"Epoch: {epochs[frame]}, NSE: {nses[frame]:.3f}, Loglik: {logliks[frame]:.4f}")
     return median_line, ax.collections[0], title
 
 ani = FuncAnimation(fig, update, frames=len(medians), interval=100, blit=True)
