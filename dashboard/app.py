@@ -103,9 +103,9 @@ else:
 qsim_median = np.median(qsim, axis=1).flatten()
 qsim_lower = np.quantile(qsim, 0.05, axis=1).flatten()
 qsim_upper = np.quantile(qsim, 0.95, axis=1).flatten()
-lppd = 0.0
+loglik = 0.0
 for idx in range(len(qsim_median)):
-    lppd += np.log(calc_knn_density(qobs[idx].reshape(-1, 1), qsim[idx, :].reshape(-1, 1)))[0]
+    loglik += np.log(calc_knn_density(qobs[idx].reshape(-1, 1), qsim[idx, :].reshape(-1, 1)))[0]
 
 
 num_days = len(pd.date_range(start="1999-04-01", end="1999-10-01", freq="D"))
@@ -132,7 +132,7 @@ st.pyplot(fig)
 
 col1, col2 = st.columns(2)
 col1.metric("NSE", f"{nse:.3f}")
-col2.metric("LPPD", f"{lppd:.0f}")
+col2.metric("Log-likelihood", f"{loglik:.0f}")
 
 md = r"""
 # Notes
