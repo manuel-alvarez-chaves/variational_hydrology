@@ -38,7 +38,7 @@ for basin in tqdm(basin_ids, ascii=True):
     metrics[experiment_name][basin]["FHV"] = float(calc_metrics.fdc_fhv(data.y_obs, data.y_hat.mean(dim="samples")))
     metrics[experiment_name][basin]["FLV"] = float(calc_metrics.fdc_flv(data.y_obs, data.y_hat.mean(dim="samples")))
     metrics[experiment_name][basin]["FMS"] = float(calc_metrics.fdc_fms(data.y_obs, data.y_hat.mean(dim="samples")))    
-    metrics[experiment_name][basin]["LOGLIK"] = calc_kde_loglik(data.y_obs, data.y_hat)
+    metrics[experiment_name][basin]["LOGLIK"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
 
 with Path.open(path_metrics, "w") as f:
     json.dump(metrics, f, indent=4)
