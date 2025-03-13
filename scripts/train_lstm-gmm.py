@@ -7,6 +7,7 @@ import yaml
 from information_hydrology.modelzoo.lstmgmm import LSTMGMM
 from information_hydrology.utils.logging import get_logger
 from information_hydrology.utils.loss_fn import loss_nll
+from information_hydrology.utils.metrics import calc_nse
 from information_hydrology.utils.miscellaneous import seconds_to_time, set_seed
 from information_hydrology.utils.training import Period, get_dataset
 from torch.utils.data import DataLoader
@@ -15,7 +16,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "LSTM-GMM-10_NLL-GAUSS_064_10_060"
+experiment_name = "LSTM-GMM-064-10_NLL-GAUSS_060"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -93,7 +94,7 @@ ds_val.standardize_data(standardize_output=False)
 dl_val = DataLoader(
     ds_val,
     batch_size=config_data["batch_size"],
-    shuffle=True,
+    shuffle=False,
     drop_last=True,
     collate_fn=ds_val.collate_fn,
 )
@@ -114,7 +115,7 @@ def training_loop(epoch: int, period: str):
          misc = {"desc": "Validation", "track_grad": False}
     
     time_epoch = time.time()
-    epoch_loss = []
+    epoch_loss, epoch_nse = [], []
     for sample in tqdm(loader, desc=misc["desc"], ncols=79, ascii=True, unit="batch", position=1):
         # Fix inputs
         x_d, x_s, y, _, _, _ = sample.values()
@@ -127,6 +128,8 @@ def training_loop(epoch: int, period: str):
             optimizer.zero_grad()
 
         y_hat = model(x)
+        mu, _, w = y_hat
+        nse = calc_nse(y.flatten().detach().numpy(), (mu * w).sum(dim=1).flatten().detach().numpy())
         loss = loss_nll(y_hat, y)
 
         if period == "train":
@@ -139,11 +142,13 @@ def training_loop(epoch: int, period: str):
             optimizer.step()
 
         epoch_loss.append(loss.item())
+        epoch_nse.append(nse)
 
         del x_d, y, x_s, x, loss
     
     # Average loss epoch
     loss = sum(epoch_loss) / len(epoch_loss)
+    nse = sum(epoch_nse) / len(epoch_nse)
 
     if period == "train":
         path_save_model = path_save_folder / f"model_epoch_{(epoch + 1):02d}.pt"
@@ -151,29 +156,30 @@ def training_loop(epoch: int, period: str):
 
     time_epoch = seconds_to_time(time.time() - time_epoch)
 
-    return loss, time_epoch
+    return loss, nse, time_epoch
 
 # # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
 
-num_epochs = 8
+num_epochs = 40
 num_validate_every = 2
 
 lrs = [1e-3] * 30 + [1e-4] * 10
 
 logger.info("Training loop")
 time_training = time.time()
-logger.info(f"{'Epoch':^5} | {'LR':^8} | {'Train Loss':^8} | {'Time':^8} | {'Val. Loss':^8} | {'Time':^8}")
+logger.info(f"{'':^5} | {'':^8} | {'Trainining':^30} | {'Validation':^30} |")
+logger.info(f"{'Epoch':^5} | {'LR':^8} | {'Loss':^8} | {'NSE':^8} | {'Time':^8} | {'Loss':^8} | {'NSE':^8} | {'Time':^8} |")
 
 time_training = time.time()
 for epoch in trange(num_epochs, desc="Epochs", ncols=78, ascii=True, unit="epoch"):
     # Train
-    loss_train, time_train = training_loop(epoch, "train")
+    loss_train, nse_train, time_train = training_loop(epoch, "train")
     if (epoch + 1) % num_validate_every != 0:
-        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^10.4f} | {time_train:^8} | {'':^9} | {'':^8}")
+        logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^8.4f} | {nse_train:^8.4f} | {time_train:^8} | {'':^8} | {'':^8} | {'':^8} |")
         continue
     # Validate
-    loss_val, time_val = training_loop(epoch, "validate")
-    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^10.4f} | {time_train:^8} | {loss_val:^9.4f} | {time_val:^8}")
+    loss_val, nse_val, time_val = training_loop(epoch, "validate")
+    logger.info(f"{epoch + 1:^5} | {lrs[epoch]:^8.1e} | {loss_train:^8.4f} | {nse_train:^8.4f} | {time_train:^8} | {loss_val:^8.4f} | {nse_val:^8.4f} | {time_val:^8} |")
 
 time_training = time.time() - time_training
 logger.info("Run completed successfully")
