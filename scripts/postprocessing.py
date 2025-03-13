@@ -99,7 +99,9 @@ for basin in tqdm(basins, ascii=True):
                 pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False)
                 y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples, num_targets]
             case "LSTM-GMM":
+                mu, _, w = model.forward(x)
                 pred = model.sample(x, num_samples)
+                pred[:, 0] = (mu * w).sum(dim=1)
                 y_hat_sample = pred.detach().cpu().clone().numpy() # [batch_size, num_samples]
         
         dates.append(date) # list of num_batches
