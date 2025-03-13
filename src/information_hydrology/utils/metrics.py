@@ -30,7 +30,7 @@ def calc_nse(obs: np.array, sim: np.array):
     return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
 
 def calc_kde_loglik(obs, sim):
-    obs, sim = _mask(obs.values, sim.values)
+    obs, sim = _mask(obs, sim)
     n = len(obs)
     loglik = np.empty(n)
     for idx in range(n):
