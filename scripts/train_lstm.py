@@ -120,7 +120,10 @@ def training_loop(epoch: int, period: str):
     epoch_loss, epoch_nse = [], []
     for sample in tqdm(loader, desc=misc["desc"], ncols=79, ascii=True, unit="batch", position=1):
         # Fix inputs
-        y = sample["y_obs"]
+        x_d, x_s, y, _, _, _ = sample.values()
+        x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
+        x = torch.cat([x_d, x_s], dim=-1).to(device)
+        sample = {"x_d": x, "basin_std": sample["basin_std"].to(device)}
         y = y[:, -1, :].to(device)
 
         # Forward pass
@@ -129,7 +132,7 @@ def training_loop(epoch: int, period: str):
 
         y_hat = model(sample)["y_hat"][:, 0]
         loss = nse_basin_averaged(y_hat, y, sample["basin_std"])
-        nse = calc_nse(y.flatten().detach().numpy(), y_hat.flatten().detach().numpy())
+        nse = calc_nse(y.flatten().detach().cpu().numpy(), y_hat.flatten().detach().cpu().numpy())
 
         if period == "train":
             loss.backward()
