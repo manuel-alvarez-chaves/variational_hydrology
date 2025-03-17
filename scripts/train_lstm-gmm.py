@@ -129,7 +129,7 @@ def training_loop(epoch: int, period: str):
 
         y_hat = model(x)
         mu, _, w = y_hat
-        nse = calc_nse(y.flatten().detach().numpy(), (mu * w).sum(dim=1).flatten().detach().numpy())
+        nse = calc_nse(y.flatten().detach().cpu().numpy(), (mu * w).sum(dim=1).flatten().detach().cpu().numpy())
         loss = loss_nll(y_hat, y)
 
         if period == "train":

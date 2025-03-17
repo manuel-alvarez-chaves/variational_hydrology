@@ -138,7 +138,7 @@ def training_loop(epoch: int, period: str):
         loss_1 = loss_nll(samples, y, Distribution.GAUSSIAN)
         loss_2 = loss_kld(logvar)
         loss = loss_1 + betas[epoch] * loss_2
-        nse = calc_nse(y.flatten().detach().numpy(), samples.mean(dim=1).flatten().detach().numpy())
+        nse = calc_nse(y.flatten().detach().cpu().numpy(), samples.mean(dim=1).flatten().detach().cpu().numpy())
 
         if period == "train":
             loss.backward()
