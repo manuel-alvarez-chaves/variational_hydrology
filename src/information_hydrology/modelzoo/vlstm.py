@@ -19,7 +19,8 @@ class VLSTM(nn.Module):
                  num_input: int,
                  num_hidden: int,
                  output_dropout: float,
-                 error: ErrorMode = ErrorMode.PROPORTIONAL,            
+                 error: ErrorMode = ErrorMode.PROPORTIONAL,
+                 **kwargs,
     ):
         super().__init__()
         """
@@ -44,11 +45,10 @@ class VLSTM(nn.Module):
         # Encoder
         self.encoder = nn.LSTM(input_size=num_input, hidden_size=num_hidden, batch_first=True)
         self.dropout = nn.Dropout(output_dropout)
-        
+        self._reset_parameters()
+
         # Decoder
         self.decoder = nn.Linear(num_hidden, 1)
-        self.eps = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
-        self._reset_parameters()
 
         # Variational Inference
         self.fc_logvar = nn.Linear(num_hidden, num_hidden)
@@ -56,7 +56,16 @@ class VLSTM(nn.Module):
 
         # Dense layer for Error Mode
         if self.error == ErrorMode.DENSE:
-            self.dense = nn.Sequential(nn.Linear(num_hidden, num_hidden), nn.ReLU())
+            num_layers = kwargs.get("num_layers", 1)
+            activation = kwargs.get("activation", nn.ReLU())
+
+            layers = []
+            for _ in range(num_layers):
+                layers.append(nn.Linear(num_hidden, num_hidden))
+                layers.append(activation)
+            
+            self.dense = nn.Sequential(*layers)
+                
 
     def _reset_parameters(self):
         self.encoder.bias_hh_l0.data[self.hidden_size:2 * self.hidden_size] = 3.0
