@@ -8,6 +8,7 @@ import torch
 import xarray as xr
 import yaml
 from hy2dl.datasetzoo.camelsus import CAMELS_US
+from hy2dl.modelzoo.cudalstm import CudaLSTM
 from information_hydrology.modelzoo.lstmgmm import LSTMGMM
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from torch.utils.data import DataLoader
@@ -28,11 +29,16 @@ experiment_name = config["experiment"]
 
 # Load model
 model_name = config["model"]["name"]
-num_inputs = config["model"]["num_inputs"]
-num_hidden = config["model"]["num_hidden"]
-percent_dropout = config["model"]["percent_dropout"]
+
+if model_name not in ["LSTM"]:
+    num_inputs = config["model"]["num_inputs"]
+    num_hidden = config["model"]["num_hidden"]
+    percent_dropout = config["model"]["percent_dropout"]
+    num_dnn_layers = 1
 num_samples = 1_000
 match model_name:
+    case "LSTM":
+        model = CudaLSTM(config["model"])
     case "vLSTM":
         match config["model"]["error"]:
             case "proportional":
@@ -41,8 +47,9 @@ match model_name:
                 error_mode = ErrorMode.EXPONENTIAL
             case "dense":
                 error_mode = ErrorMode.DENSE
-        model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode)
-    case "LSTM-GMM":
+                num_dnn_layers = config["model"]["num_layers"]
+        model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode, num_layers=num_dnn_layers)
+    case "LSTM_GMM":
         num_gaussians = config["model"]["num_gaussians"]
         model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
     case _:    
@@ -82,6 +89,7 @@ for basin in tqdm(basins, ascii=True):
         static_input=config["data"]["static_attributes"],
     )
     ds.scaler = scaler
+    ds.calculate_basin_std()
     ds.standardize_data(standardize_output=False)
 
     loader = DataLoader(ds, batch_size=256, shuffle=False, collate_fn=ds.collate_fn)
@@ -89,16 +97,21 @@ for basin in tqdm(basins, ascii=True):
     dates, y_obs, y_hat = [], [], []
     for sample in loader:
         # Fix inputs
-        x_d, x_s, y, _, date = sample.values()
+        x_d, x_s, y, _, _, date = sample.values()
         x_s = x_s.unsqueeze(1).repeat(1, x_d.shape[1], 1)
         x = torch.cat([x_d, x_s], dim=-1).to(device)
         y = y[:, -1, :].to(device)
+        sample = {"x_d": x, "basin_std": sample["basin_std"].to(device)}
 
         match model_name:
+            case "LSTM":
+                pred = model(sample)["y_hat"][:, 0] # [batch_size, num_targets]
+                pred = pred.unsqueeze(1) # [batch_size, num_samples, num_targets]
+                y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples] 
             case "vLSTM":
-                pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False)
-                y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples, num_targets]
-            case "LSTM-GMM":
+                pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False) # [batch_size, num_samples, num_targets]
+                y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples]
+            case "LSTM_GMM":
                 mu, _, w = model.forward(x)
                 pred = model.sample(x, num_samples)
                 pred[:, 0] = (mu * w).sum(dim=1)
@@ -107,7 +120,7 @@ for basin in tqdm(basins, ascii=True):
         dates.append(date) # list of num_batches
         y_obs.append(y.detach().cpu().clone().numpy()[:, 0]) # [batch_size, num_targets]
         y_hat.append(y_hat_sample)
-        del x_d, x_s, y, date, x, pred
+        del x_d, x_s, y, date, x, sample, pred, y_hat_sample
     
       
     out[basin] = {
