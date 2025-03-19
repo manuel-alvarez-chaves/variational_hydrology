@@ -12,6 +12,7 @@ path_metrics = Path("experiments/metrics.json")
 # Path to .nc file
 path_experiment = Path(sys.argv[1])
 experiment_name = path_experiment.name.split(".")[0][4:]
+model = experiment_name.split("-")[0]
 
 if path_metrics.exists():
     with Path.open(path_metrics, "r") as f:
@@ -37,8 +38,11 @@ for basin in tqdm(basin_ids, ascii=True):
     metrics[experiment_name][basin]["b_NSE"] = calc_metrics.beta_nse(data.y_obs, data.y_hat.mean(dim="samples"))
     metrics[experiment_name][basin]["FHV"] = float(calc_metrics.fdc_fhv(data.y_obs, data.y_hat.mean(dim="samples")))
     metrics[experiment_name][basin]["FLV"] = float(calc_metrics.fdc_flv(data.y_obs, data.y_hat.mean(dim="samples")))
-    metrics[experiment_name][basin]["FMS"] = float(calc_metrics.fdc_fms(data.y_obs, data.y_hat.mean(dim="samples")))    
-    metrics[experiment_name][basin]["LOGLIK"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
+    metrics[experiment_name][basin]["FMS"] = float(calc_metrics.fdc_fms(data.y_obs, data.y_hat.mean(dim="samples")))
+    if model not in ["LSTM"]:
+        metrics[experiment_name][basin]["LOGLIK"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
+    else:
+        metrics[experiment_name][basin]["LOGLIK"] = float("nan")
 
 with Path.open(path_metrics, "w") as f:
     json.dump(metrics, f, indent=4)
