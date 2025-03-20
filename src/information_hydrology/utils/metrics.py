@@ -27,6 +27,7 @@ def calc_cdf(metric: list):
     return {"x": x, "y": y, "median": median, "auc": auc}
 
 def calc_nse(obs: np.array, sim: np.array):
+    obs, sim = _mask(obs, sim)
     return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
 
 def calc_kde_loglik(obs, sim):
