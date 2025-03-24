@@ -41,7 +41,7 @@ match model_name:
             case "dense":
                 error_mode = ErrorMode.DENSE
         model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode)
-    case "LSTM_GMM":
+    case "LSTMGMM":
         num_gaussians = config["model"]["num_gaussians"]
         model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
     case _:    
@@ -94,7 +94,7 @@ for path_model in tqdm(path_models, ascii=True):
             case "vLSTM":
                 pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False)
                 y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples, num_targets]
-            case "LSTM_GMM":
+            case "LSTMGMM":
                 pred = model.sample(x, num_samples)
                 y_hat_sample = pred.detach().cpu().clone().numpy() # [batch_size, num_samples]
 

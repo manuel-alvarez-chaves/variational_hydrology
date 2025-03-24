@@ -49,7 +49,7 @@ match model_name:
                 error_mode = ErrorMode.DENSE
                 num_dnn_layers = config["model"]["num_layers"]
         model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode, num_layers=num_dnn_layers)
-    case "LSTM_GMM":
+    case "LSTMGMM":
         num_gaussians = config["model"]["num_gaussians"]
         model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
     case _:    
@@ -111,7 +111,7 @@ for basin in tqdm(basins, ascii=True):
             case "vLSTM":
                 pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False) # [batch_size, num_samples, num_targets]
                 y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples]
-            case "LSTM_GMM":
+            case "LSTMGMM":
                 mu, _, w = model.forward(x)
                 pred = model.sample(x, num_samples)
                 pred[:, 0] = (mu * w).sum(dim=1)
