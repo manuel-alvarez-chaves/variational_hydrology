@@ -32,7 +32,6 @@ for basin in tqdm(basin_ids, ascii=True):
     metrics[experiment_name][basin] = {}
     metrics[experiment_name][basin]["NSE"] = calc_metrics.nse(data.y_obs, data.y_hat.mean(dim="samples"))
     metrics[experiment_name][basin]["KGE"] = calc_metrics.kge(data.y_obs, data.y_hat.mean(dim="samples"))
-    metrics[experiment_name][basin]["KGE"] = calc_metrics.kge(data.y_obs, data.y_hat.mean(dim="samples"))
     metrics[experiment_name][basin]["CORR"] = calc_metrics.pearsonr(data.y_obs, data.y_hat.mean(dim="samples"))
     metrics[experiment_name][basin]["a_NSE"] = calc_metrics.alpha_nse(data.y_obs, data.y_hat.mean(dim="samples"))
     metrics[experiment_name][basin]["b_NSE"] = calc_metrics.beta_nse(data.y_obs, data.y_hat.mean(dim="samples"))
