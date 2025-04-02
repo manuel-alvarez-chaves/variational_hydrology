@@ -38,8 +38,8 @@ columns = {
 colors = {
     "LSTM-256": '#0C5DA5',
     "LSTMGMM-250-10": '#FF9500',
-    "VLSTM-250-PRO": '#00B945',
-    "VLSTM-250-DENSE": '#FF2C00',
+    "VLSTM-250-PRO": '#FF2C00',
+    "VLSTM-250-DENSE": '#00B945',
 }
 
 labels = {
@@ -48,6 +48,7 @@ labels = {
     "VLSTM-250-PRO": "vLSTM (proportional)",
     "VLSTM-250-DENSE": "vLSTM (dense)",
 }
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 path_experiment = Path(sys.argv[1])
@@ -89,8 +90,7 @@ match model_name:
         raise ValueError(f"Model {model_name} not recognized")
 
 # Load model weights and biases
-path_models = list(path_experiment.glob("*.pt"))
-path_models.sort()
+path_models = sorted(path_experiment.glob("*.pt"))
 
 # Scaler
 with Path.open(path_experiment / "scaler.pickle", "rb") as f:
@@ -140,7 +140,7 @@ batch_test = next(iter(subset_test))
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-for epoch, params in tqdm(enumerate(path_models), ascii=True):
+for epoch, params in tqdm(enumerate(path_models), total=len(path_models), ascii=True):
 
     fig = plt.figure(figsize=(6.96 * phi, 6.96 / 1.5))
     axes = []
