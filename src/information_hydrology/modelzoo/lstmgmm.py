@@ -35,6 +35,19 @@ class LSTMGMM(nn.Module):
         self._reset_parameters()
 
     def forward(self, x):
+        """
+        The forward function defines the forward pass of a neural network module.
+        
+        Parameters
+        ----------
+        x : passed through a LSTM layer.
+        
+        Returns
+        -------
+        mu : Computes the mean of the connected layer which likely has a distribution.
+        sigma : Computes standard deviation by applying the exponential function to the output of the fully connected layer.
+        w : Computes weight, representing additional output from the LSTM's final hidden state.
+        """
         _, (h_n, _) = self.lstm(x)
         out = h_n[-1] # many-to-one
         out = self.dropout(out)
@@ -44,6 +57,19 @@ class LSTMGMM(nn.Module):
         return mu, sigma, w
     
     def sample(self, x, num_samples):
+        """
+        Sample function generates random samples from a learned distribution based on input.
+        
+        Parameters
+        ----------
+        x : input
+        num_samples : int
+            The number of random samples to generate for each input.
+        
+        Returns
+        -------
+        samples : A tensor containing the final weighted random samples, computed based on the learned distribution.
+        """
         with torch.no_grad():
             mu, sigma, w = self.forward(x)
             samples = [(torch.randn_like(mu) * sigma + mu).unsqueeze(1) for _ in range(num_samples)]
