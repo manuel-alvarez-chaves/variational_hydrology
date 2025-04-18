@@ -17,7 +17,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "LSTMCMAL-010-03_NLL-LAPLACE_S01_005"
+experiment_name = "LSTMCMAL-064-03_NLL-LAPLACE_S01_005"
 seed = set_seed(1)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -43,7 +43,7 @@ logger.info(f"Using device: {device}")
 
 # Model
 num_inputs = len(config_data["dynamic_inputs"]) + len(config_data["static_attributes"])
-num_hidden = 10
+num_hidden = 64
 distribution = Distribution.LAPLACE
 num_components = 3
 output_dropout = 0.4

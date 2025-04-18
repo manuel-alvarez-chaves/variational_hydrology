@@ -53,16 +53,16 @@ class LSTMMDN(nn.Module):
         match self.distribution:
             case Distribution.GAUSSIAN:
                 (loc, scale, _), w = self(x)
-                mean = loc.detach().numpy()
+                mean = loc.detach().cpu().numpy()
             case Distribution.LAPLACE:
                 (loc, scale, kappa), w = self(x)
-                loc, scale, kappa = loc.detach().numpy(), scale.detach().numpy(), kappa.detach().numpy()
+                loc, scale, kappa = loc.detach().cpu().numpy(), scale.detach().cpu().numpy(), kappa.detach().cpu().numpy()
                 mean = np.empty_like(loc)
                 for idx in range(loc.shape[0]):
                     for idy in range(loc.shape[1]):
                         mu, _, _, _ = laplace_asymmetric(kappa=kappa[idx, idy], loc=loc[idx, idy], scale=scale[idx, idy]).stats(moments="mvsk")
                         mean[idx, idy] = mu
-        mean = (mean * w.detach().numpy()).sum(axis=-1)
+        mean = (mean * w.detach().cpu().numpy()).sum(axis=-1)
         return mean
     
     def sample(self, x, num_samples):
