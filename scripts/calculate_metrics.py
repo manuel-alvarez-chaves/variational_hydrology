@@ -133,8 +133,6 @@ def generate_netcdf(path_to_model_dict: Path) -> Tuple[str, xr.Dataset]:
             "y_hat": np.concatenate(y_hat),
         }
         del dates, y_obs, y_hat
-        if basin == "01047000":
-            break
 
     # Reshape results
     dates = out[basins[0]]["dates"].flatten()
@@ -202,6 +200,7 @@ def main():
     save_netcdf = args.save
 
     # Postprocess experiment
+    tqdm.write(f"Loading experiment {path_experiment}")
     match path_experiment.suffix:
         case ".pt":
             name, results = generate_netcdf(path_experiment)
