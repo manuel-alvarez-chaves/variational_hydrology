@@ -52,7 +52,7 @@ config_model = {
         "name": "LSTMCMAL",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
-        "head": distribution,
+        "head": distribution.value,
         "num_components": num_components,
         "percent_dropout": output_dropout,
 }
