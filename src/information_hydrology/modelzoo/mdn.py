@@ -72,11 +72,11 @@ class LSTMMDN(nn.Module):
             match self.distribution:
                 case Distribution.GAUSSIAN:
                     loc, scale, _ = moments
-                    loc, scale = loc.detach().numpy(), scale.detach().numpy()
+                    loc, scale = loc.detach().cpu().numpy(), scale.detach().cpu().numpy()
                 case Distribution.LAPLACE:
                     loc, scale, kappa = moments
-                    loc, scale, kappa = loc.detach().numpy(), scale.detach().numpy(), kappa.detach().numpy()
-            w = w.detach().numpy()
+                    loc, scale, kappa = loc.detach().cpu().numpy(), scale.detach().cpu().numpy(), kappa.detach().cpu().numpy()
+            w = w.detach().cpu().numpy()
 
             samples = np.empty((num_batches, num_samples, self.num_components))
             for idx in range(num_batches):
