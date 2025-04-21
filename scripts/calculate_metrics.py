@@ -11,13 +11,15 @@ import xarray as xr
 import yaml
 from hy2dl.datasetzoo.camelsus import CAMELS_US
 from hy2dl.modelzoo.cudalstm import CudaLSTM
-from information_hydrology.modelzoo.lstmgmm import LSTMGMM
+from information_hydrology.modelzoo.mdn import LSTMMDN
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
+from information_hydrology.utils.distributions import Distribution
 from information_hydrology.utils.metrics import calc_crps, calc_kde_loglik
 from neuralhydrology.evaluation import metrics as calc_metrics
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+dist = {"gaussian": Distribution.GAUSSIAN, "laplace": Distribution.LAPLACE}
 
 def generate_netcdf(path_to_model_dict: Path) -> Tuple[str, xr.Dataset]:
     # Set CPU or GPU
@@ -53,9 +55,10 @@ def generate_netcdf(path_to_model_dict: Path) -> Tuple[str, xr.Dataset]:
                     error_mode = ErrorMode.DENSE
                     num_dnn_layers = config["model"]["num_layers"]
             model = VLSTM(num_inputs, num_hidden, percent_dropout, error_mode, num_layers=num_dnn_layers)
-        case "LSTMGMM":
-            num_gaussians = config["model"]["num_gaussians"]
-            model = LSTMGMM(num_inputs, num_hidden, num_gaussians, percent_dropout)
+        case "LSTMGMM" | "LSTMCMAL":
+            num_components = config["model"]["num_components"]
+            distribution = config["model"]["head"]
+            model = LSTMMDN(num_inputs, num_hidden, dist[distribution], num_components, percent_dropout)
         case _:    
             raise ValueError(f"Model {model_name} not recognized")
 
@@ -115,11 +118,10 @@ def generate_netcdf(path_to_model_dict: Path) -> Tuple[str, xr.Dataset]:
                 case "vLSTM":
                     pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False) # [batch_size, num_samples, num_targets]
                     y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples]
-                case "LSTMGMM":
-                    mu, _, w = model.forward(x)
+                case "LSTMGMM" | "LSTMCMAL":
                     pred = model.sample(x, num_samples)
-                    pred[:, 0] = (mu * w).sum(dim=1)
-                    y_hat_sample = pred.detach().cpu().clone().numpy() # [batch_size, num_samples]
+                    pred[:, 0] = model.calc_mean(x)
+                    y_hat_sample = pred # [batch_size, num_samples]
             
             dates.append(date) # list of num_batches
             y_obs.append(y.detach().cpu().clone().numpy()[:, 0]) # [batch_size, num_targets]
@@ -200,7 +202,7 @@ def main():
     save_netcdf = args.save
 
     # Postprocess experiment
-    tqdm.write(f"Loading experiment {path_experiment}")
+    tqdm.write(f"Loading {path_experiment}")
     match path_experiment.suffix:
         case ".pt":
             name, results = generate_netcdf(path_experiment)
