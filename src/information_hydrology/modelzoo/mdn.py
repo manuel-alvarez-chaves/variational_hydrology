@@ -50,20 +50,17 @@ class LSTMMDN(nn.Module):
         return moments, w
     
     def calc_mean(self, x):
-        match self.distribution:
-            case Distribution.GAUSSIAN:
-                (loc, scale, _), w = self(x)
-                mean = loc.detach().cpu().numpy()
-            case Distribution.LAPLACE:
-                (loc, scale, kappa), w = self(x)
-                loc, scale, kappa = loc.detach().cpu().numpy(), scale.detach().cpu().numpy(), kappa.detach().cpu().numpy()
-                mean = np.empty_like(loc)
-                for idx in range(loc.shape[0]):
-                    for idy in range(loc.shape[1]):
-                        mu, _, _, _ = laplace_asymmetric(kappa=kappa[idx, idy], loc=loc[idx, idy], scale=scale[idx, idy]).stats(moments="mvsk")
-                        mean[idx, idy] = mu
-        mean = (mean * w.detach().cpu().numpy()).sum(axis=-1)
-        return mean
+        with torch.no_grad():
+            moments, w = self(x)
+            match self.distribution:
+                case Distribution.GAUSSIAN:
+                    loc, scale, _ = moments
+                    mean = loc
+                case Distribution.LAPLACE:
+                    loc, scale, kappa = moments
+                    mean = loc + scale * (1 - kappa.pow(2)) / kappa
+            mean = (mean * w).sum(axis=1)
+        return mean.cpu().numpy()
     
     def sample(self, x, num_samples):
         num_batches = x.shape[0]
@@ -72,11 +69,11 @@ class LSTMMDN(nn.Module):
             match self.distribution:
                 case Distribution.GAUSSIAN:
                     loc, scale, _ = moments
-                    loc, scale = loc.detach().cpu().numpy(), scale.detach().cpu().numpy()
+                    loc, scale = loc.cpu().numpy(), scale.cpu().numpy()
                 case Distribution.LAPLACE:
                     loc, scale, kappa = moments
-                    loc, scale, kappa = loc.detach().cpu().numpy(), scale.detach().cpu().numpy(), kappa.detach().cpu().numpy()
-            w = w.detach().cpu().numpy()
+                    loc, scale, kappa = loc.cpu().numpy(), scale.cpu().numpy(), kappa.cpu().numpy()
+            w = w.cpu().numpy()
 
             samples = np.empty((num_batches, num_samples, self.num_components))
             for idx in range(num_batches):
