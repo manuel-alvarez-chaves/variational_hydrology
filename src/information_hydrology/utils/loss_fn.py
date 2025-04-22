@@ -115,9 +115,8 @@ def loss_nll(
             
             log_p = log_p - torch.log(kappa + 1 / kappa) - torch.log(scale)
     
-    w = torch.clamp(w, min=1e-10)
-    
-    loss = -1 * (w * log_p).sum(dim=-1)
+    log_w = torch.log(torch.clamp(w, min=1e-10))
+    loss = -torch.logsumexp(log_p + log_w, dim=1)
     return loss.mean()
 
 def loss_kld(logvar: torch.Tensor) -> torch.Tensor:
