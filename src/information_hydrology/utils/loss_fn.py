@@ -106,7 +106,7 @@ def loss_nll(
             
             p = (y - loc) / scale
             
-            mask = p >= 0
+            mask = (p >= 0)
             
             log_p = torch.zeros_like(p)
             
