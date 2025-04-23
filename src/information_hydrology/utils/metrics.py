@@ -3,9 +3,31 @@ from typing import Union
 import numpy as np
 from scipy import stats
 from unite_toolbox.kde_estimators import calc_kde_density
+from typing  import Tuple, Union
 
+def _mask(*arrays: np.array) -> Tuple[np.array]:
+    """
+    Processes multiple NumPy arrays to filter out missing (NaN) values and applies a masking operation.
 
-def _mask(*arrays: np.array) -> np.array:
+    The function accepts multiple NumPy arrays as input and processes each one individually. 
+    For each array:
+    1. Determines the number of dimensions.
+    2. If the array has more than one dimension, collapses it iteratively by summing along axes.
+    3. Creates a mask marking non-NaN elements as True and NaN elements as False.
+    4. Combines the masks to filter out rows containing NaN values across all arrays.
+
+    Parameters
+    ----------
+    *arrays : np.array
+        One or more NumPy arrays to be processed. These arrays may contain NaN values 
+        and can have multiple dimensions.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the filtered versions of the input arrays, where rows with 
+        NaN values have been removed.
+    """
     masks = []
     for array in arrays:
         num_dim = array.ndim
@@ -16,7 +38,31 @@ def _mask(*arrays: np.array) -> np.array:
     mask = np.stack(masks, axis=1).all(axis=1)
     return tuple(array[mask] for array in arrays)
 
-def calc_cdf(metric: list):
+def calc_cdf(metric: list) -> dict[str: Union[np.array, np.float64]]:
+    """
+    The CDF calculation is divided into two parts:
+    1. `x`: Sorts the cleaned data in ascending order.
+    2. `y`: Computes the CDF values, providing the cumulative proportion for each value in `x`.
+
+    The function also calculates:
+    - The median of the sorted data using `np.median(x)`.
+    - The number of negative values in the dataset (`idx_nonzero`) to handle the non-negative portion.
+    - The area under the curve (AUC) for the non-negative portion of the dataset using the trapezoidal rule.
+
+    Parameters
+    ----------
+    metric : list
+        A list of numeric values, which may include NaNs. NaN values are automatically removed during processing.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - "x" (np.array): Sorted values of the input dataset (cleaned of NaN values).
+        - "y" (np.array): CDF values corresponding to the sorted dataset.
+        - "median" (float): The median value of the dataset.
+        - "auc" (float): Area under the CDF curve for non-negative values.
+    """
     metric = np.array(metric)
     metric = metric[~np.isnan(metric)]
 
@@ -27,11 +73,44 @@ def calc_cdf(metric: list):
 
     return {"x": x, "y": y, "median": median, "auc": auc}
 
-def calc_nse(obs: np.array, sim: np.array):
-    obs, sim = _mask(obs, sim)
+def calc_nse(obs: np.array, sim: np.array) -> np.float64:
+    """
+    Calculates the Nash-Sutcliffe Efficiency (NSE) to evaluate the performance of a simulation model by comparing simulated and observed data. 
+    
+    Parameters
+    ----------
+    obs : np.array
+        The observed dataset.
+    sim : np.array
+        The simulated dataset to be compared against the observed data.
+            
+    Returns
+    -------
+    float
+        The Nash-Sutcliffe Efficiency (NSE) score:
+        - if NSE = 1 Perfect relation between simulation and observation.
+        - if NSE = 0 Simulation is as accurate as the mean of the observed data. 
+        - if NSE < 0 Simulation performed worse than simply using the mean of the observed data as a predictor.
+    """
     return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
 
-def calc_kde_loglik(obs: np.array, sim: np.array) -> np.float64:
+def calc_kde_loglik(obs: np.array, sim: np.array) -> np.array:
+    """
+    Calculates the log-likelihood of the observed data compared to the simulated data using Kernel Density Estimation (KDE). 
+    This function uses KDE to estimate the probability density of each observed data point based on the corresponding simulated data. The log-likelihoods are averaged to provide an overall measure of fit.
+
+    Parameters
+    ----------
+    obs : np.array
+        The observed dataset.
+    sim : np.array
+        The simulated dataset, corresponding to the observed dataset.
+
+    Returns
+    -------
+    float
+        The mean log-likelihood value, representing the average likelihood of the observed data given the simulated data.
+    """
     obs, sim = _mask(obs, sim)
     n = len(obs)
     loglik = np.empty(n)
