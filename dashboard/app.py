@@ -2,9 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import streamlit as st
-from information_hydrology.utils.metrics import calc_nse
 from unite_toolbox.knn_estimators import calc_knn_density
 
+
+def calc_nse(obs: np.array, sim: np.array):
+    return 1 - np.sum((obs - sim) ** 2) / np.sum((obs - np.mean(obs)) ** 2)
 
 class PowerReservoir:
     def __init__(self, params=None):
@@ -85,6 +87,7 @@ sigma = st.slider(
 button = st.toggle("Heteroskedastic")
 
 
+
 pw = PowerReservoir()
 s, qobs = pw.forward(p, et)
 
@@ -111,6 +114,10 @@ for idx in range(len(qsim_median)):
 num_days = len(pd.date_range(start="1999-04-01", end="1999-10-01", freq="D"))
 dates = data.index[-num_days:]
 
+col1, col2 = st.columns(2)
+col1.metric("NSE", f"{nse:.3f}")
+col2.metric("Log-likelihood", f"{loglik:.0f}")
+
 # Plot
 fig, ax = plt.subplots()
 
@@ -129,10 +136,6 @@ ax.grid(True)
 
 # Display the plot in Streamlit
 st.pyplot(fig)
-
-col1, col2 = st.columns(2)
-col1.metric("NSE", f"{nse:.3f}")
-col2.metric("Log-likelihood", f"{loglik:.0f}")
 
 md = r"""
 # Notes
@@ -185,17 +188,17 @@ $$NSE = 1 - \frac{\sum(Q_{obs} - Q_{sim})^2}{\sum(Q_{obs} - \overline{Q}_{obs})^
 
 The numerator of the equation is similar to mean-squared error. NSE is better when it's closer to 1.
 
-### LPPD
-The log pointwise predictive density (LPPD) is a metric that evaluates the predictive performance of the model
-by calculating the density of each observation in the posterior predictive distribution of the model. Adapted from
-Gelman et al. (2013), it can be defined as:
+### Log-likelihood
+The log-likelihood is a measure of how well the model fits the data. It can be described as the probability density
+of the observed data $y_{obs}$ under the model $\hat{p}(\cdot)$.
 
-$$\sum \log p_{post}(y)$$
+$$\sum \log \hat{p}(y_{obs})$$
 
-Because often the posterior predictive distribution is not available in closed form, using the [Unite Toolbox](https://github.com/manuel-alvarez-chaves/unite_toolbox), we approximate
-$p_{post}(y)$ using a k-nearest neighbors estimator.
+Because often the predictive distribution of the model is not available in closed form,
+for this dashboard we use the [UNITE toolbox](https://github.com/manuel-alvarez-chaves/unite_toolbox),
+to approximate $\hat{p}(y_{obs})$ using a k-nearest neighbors estimator.
 
-$$p_{post}(y) \approx \hat{p}_k(y) = \frac{k}{N-1} \cdot \frac{1}{c_1(d)\;\rho^{d}_k(i)}$$
+$$\hat{p}_k(y) = \frac{k}{N-1} \cdot \frac{1}{c_1(d)\;\rho^{d}_k(i)}$$
 
 Where:
 - $k$ is the number of neighbors.
@@ -209,5 +212,6 @@ simulated samples $y_{sim}$. This is done for each observation in the dataset.
 
 ## References
 - Gelman, A., Hwang, J., & Vehtari, A. (2013). Understanding predictive information criteria for Bayesian models (arXiv:1307.5928). arXiv. https://doi.org/10.48550/arXiv.1307.5928
+- Wang, Q., Kulkarni, S. R., & Verdu, S. (2009). Divergence Estimation for Multidimensional Densities Via k-Nearest-Neighbor Distances. IEEE Transactions on Information Theory, 55(5), 2392–2405. IEEE Transactions on Information Theory. https://doi.org/10.1109/TIT.2009.2016060
 """
 st.markdown(md)
