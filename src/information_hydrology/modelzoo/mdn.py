@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
 from scipy.stats import laplace_asymmetric, norm
 from torch import nn
 
@@ -40,12 +41,12 @@ class LSTMMDN(nn.Module):
         match self.distribution:
             case Distribution.GAUSSIAN:
                 loc, scale = out.chunk(2, dim=-1)
-                scale = torch.exp(scale)
+                scale = F.softplus(scale)
                 moments = (loc, scale, None)
             case Distribution.LAPLACE:
                 loc, scale, kappa = out.chunk(3, dim=-1)
-                scale = nn.Softplus()(scale)
-                kappa = torch.sigmoid(kappa)
+                scale = F.softplus(scale)
+                kappa = F.softplus(kappa)
                 moments = (loc, scale, kappa)
         return moments, w
     
