@@ -1,7 +1,5 @@
-import numpy as np
 import torch
 import torch.nn.functional as F
-from scipy.stats import laplace_asymmetric, norm
 from torch import nn
 
 from information_hydrology.utils.distributions import Distribution
@@ -45,12 +43,12 @@ class LSTMMDN(nn.Module):
                 moments = (loc, scale, None)
             case Distribution.LAPLACE:
                 loc, scale, kappa = out.chunk(3, dim=-1)
-                scale = F.softplus(scale)
+                scale = F.softplus(scale) 
                 kappa = F.softplus(kappa)
                 moments = (loc, scale, kappa)
         return moments, w
     
-    def calc_mean(self, x):
+    def mean(self, x):
         with torch.no_grad():
             moments, w = self(x)
             match self.distribution:
@@ -64,29 +62,39 @@ class LSTMMDN(nn.Module):
         return mean.cpu().numpy()
     
     def sample(self, x, num_samples):
-        num_batches = x.shape[0]
         with torch.no_grad():
             moments, w = self(x)
+            num_batches, num_components = moments[0].shape
             match self.distribution:
                 case Distribution.GAUSSIAN:
                     loc, scale, _ = moments
-                    loc, scale = loc.cpu().numpy(), scale.cpu().numpy()
+                    samples = torch.randn(num_batches, num_components, num_samples)
                 case Distribution.LAPLACE:
                     loc, scale, kappa = moments
-                    loc, scale, kappa = loc.cpu().numpy(), scale.cpu().numpy(), kappa.cpu().numpy()
-            w = w.cpu().numpy()
+                    u = torch.rand(num_batches, num_components, num_samples)  # [num_batches, num_components, num_samples]
+                    # Sampling left or right of the mode?
+                    kappa = kappa.unsqueeze(-1).repeat((1, 1, num_samples))  # [num_batches, num_components, num_samples]
+                    p_at_mode = kappa**2 / (1 + kappa**2) # [num_batches, num_components]
 
-            samples = np.empty((num_batches, num_samples, self.num_components))
-            for idx in range(num_batches):
-                for idy in range(self.num_components):
-                    match self.distribution:
-                        case Distribution.GAUSSIAN:
-                            samples[idx, :, idy] = norm(loc[idx, idy], scale[idx, idy]).rvs(num_samples)
-                        case Distribution.LAPLACE:
-                            samples[idx, :, idy] = laplace_asymmetric(kappa=kappa[idx, idy], loc=loc[idx, idy], scale=scale[idx, idy]).rvs(num_samples)
-        w =  w[:, np.newaxis, :]
-        samples = (samples * w).sum(axis=-1)
-        return samples
+                    mask = u < p_at_mode  # [num_batches, num_components, num_samples]
+
+                    samples = torch.zeros_like(u)  # [num_batches, num_components, num_samples]
+
+                    samples[mask] = kappa[mask] * torch.log(u[mask] * (1 + kappa[mask].pow(2)) / kappa[mask].pow(2)) # Left side
+                    samples[~mask] = -1 * torch.log((1 - u[~mask]) * (1 + kappa[~mask].pow(2))) / kappa[~mask] # Right side
+
+            # Rescale the samples
+            samples = samples * scale.unsqueeze(-1) + loc.unsqueeze(-1)  # [num_batches, num_components, num_samples]
+
+            # Select samples according to weights
+            indices = torch.multinomial(w, num_samples, replacement=True) # [num_batches, num_samples]
+            indices = indices.unsqueeze(1)  # [num_batches, 1, num_samples]
+                
+            # Now gather
+            result = torch.gather(samples, dim=1, index=indices)  # Shape: [num_batches, 1, num_samples]
+            result = result.squeeze(1)  # [num_batches, num_samples]
+            
+        return result
     
     def _reset_parameters(self):
         self.lstm.bias_hh_l0.data[self.hidden_size:2 * self.hidden_size] = 3.0
