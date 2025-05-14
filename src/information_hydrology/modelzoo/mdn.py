@@ -59,7 +59,7 @@ class LSTMMDN(nn.Module):
                     loc, scale, kappa = moments
                     mean = loc + scale * (1 - kappa.pow(2)) / kappa
             mean = (mean * w).sum(axis=1)
-        return mean.cpu().numpy()
+        return mean
     
     def sample(self, x, num_samples):
         with torch.no_grad():
