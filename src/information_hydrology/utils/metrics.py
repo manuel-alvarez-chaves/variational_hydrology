@@ -33,7 +33,7 @@ def _mask(*arrays: np.array) -> Tuple[np.array]:
         num_dim = array.ndim
         for _ in range(num_dim - 1):
             array = array.sum(axis=1)
-        mask = ~np.isnan(array)
+        mask = ~(np.isnan(array) | np.isinf(array))
         masks.append(mask)
     mask = np.stack(masks, axis=1).all(axis=1)
     return tuple(array[mask] for array in arrays)
