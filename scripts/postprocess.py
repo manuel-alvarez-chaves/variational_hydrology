@@ -14,7 +14,7 @@ from hy2dl.modelzoo.cudalstm import CudaLSTM
 from information_hydrology.modelzoo.mdn import LSTMMDN
 from information_hydrology.modelzoo.vlstm import VLSTM, ErrorMode, SamplingMode
 from information_hydrology.utils.distributions import Distribution
-from information_hydrology.utils.loss_fn import loss_nll
+from information_hydrology.utils.loss_fn import loss_nll, loss_nll_kde
 from information_hydrology.utils.metrics import calc_crps, calc_kde_loglik
 from neuralhydrology.evaluation import metrics as calc_metrics
 from torch.utils.data import DataLoader
@@ -256,12 +256,22 @@ def generate_metrics(ds: xr.Dataset, name: str, path_metrics: Path) -> None:
         metrics[experiment_name][basin]["FLV"] = float(calc_metrics.fdc_flv(data.y_obs, y_hat_mean))
         metrics[experiment_name][basin]["FMS"] = float(calc_metrics.fdc_fms(data.y_obs, y_hat_mean))
         if model not in ["LSTM"]:
+            metrics[experiment_name][basin]["LOGLIK_TRU"] = float("nan")
             metrics[experiment_name][basin]["LOGLIK_KDE"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
             metrics[experiment_name][basin]["CRPS"] = calc_crps(data.y_obs.values, data.y_hat.values)
         if model in ["LSTMCMAL", "LSTMGMM"]:
-            loglik = loss_nll((params, w), torch.tensor(data.y_obs.values, requires_grad=False).reshape(-1, 1), dist_arg)
+            loglik = -1 * loss_nll((params, w), torch.tensor(data.y_obs.values, requires_grad=False).reshape(-1, 1), dist_arg)
             metrics[experiment_name][basin]["LOGLIK_TRU"] = float(loglik.item())
-        else:
+        if model == "VLSTM":
+            samples = torch.tensor(data.y_hat.values, requires_grad=False).unsqueeze(-1)
+            obs = torch.tensor(data.y_obs.values, requires_grad=False).reshape(-1, 1)
+            if name.split("_")[0].split("-")[-1] == "PRO":
+                loglik = -1 * loss_nll(samples, obs, Distribution.GAUSSIAN)
+            else:
+                loglik = -1 * loss_nll_kde(samples, obs)
+            metrics[experiment_name][basin]["LOGLIK_TRU"] = float(loglik.item())
+        if model == "LSTM":
+            metrics[experiment_name][basin]["LOGLIK_TRU"] = float("nan")
             metrics[experiment_name][basin]["LOGLIK_KDE"] = float("nan")
             metrics[experiment_name][basin]["CRPS"] = float("nan")
         
