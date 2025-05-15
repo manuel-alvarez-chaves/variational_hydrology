@@ -198,7 +198,7 @@ def silverman(data):
     h = 0.9 * a * (n ** (-1 / 5)) # [num_batches x 1]
     return h
 
-def loss_log_p_kde(y_hat, y):
+def loss_kde_custom_kde(y_hat, y):
     num_samples = y_hat.shape[1]
 
     # Adjust shapes
