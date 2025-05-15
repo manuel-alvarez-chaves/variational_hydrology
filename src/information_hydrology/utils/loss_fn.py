@@ -189,3 +189,29 @@ def loss_nll_kde(y_hat, y):
     logprob = torch.stack(logprob)
     loss = -logprob.mean()
     return loss
+
+def silverman(data):
+    n = data.shape[1] # num_samples
+    std = data.std(dim=1)
+    iqr = data.quantile(0.75, dim=1) - data.quantile(0.25, dim=1)
+    a = torch.min(std, iqr / 1.349)
+    h = 0.9 * a * (n ** (-1 / 5)) # [num_batches x 1]
+    return h
+
+def loss_log_p_kde(y_hat, y):
+    num_samples = y_hat.shape[1]
+
+    # Adjust shapes
+    h = silverman(y_hat) # [num_batches x 1]
+    h = h.unsqueeze(1).repeat(1, num_samples, 1) # [num_batches x num_samples x 1]
+    sigma = y_hat.std(dim=1).unsqueeze(1).repeat(1, num_samples, 1) # [num_batches x num_samples x 1]
+    y = y.unsqueeze(1).repeat(1, num_samples, 1)
+    
+    # Calculate KDE log-likelihood
+    dist = (y - y_hat).pow(2)
+    p = -1 * dist / (2 * (h**2) * (sigma**2))
+    p = p.exp().sum(dim=1)
+    p = torch.clamp(p, min=1e-10)
+    log_p = p.log() - torch.log(num_samples * h[:, 0, :] * sigma[:, 0, :]) - np.log(np.sqrt(2 * np.pi))
+    loss = -1 * log_p.mean(dim=0)
+    return loss
