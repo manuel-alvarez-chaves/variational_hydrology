@@ -11,8 +11,6 @@ from information_hydrology.utils.loss_fn import (
         loss_kld,
         loss_nll,
         loss_nll_kde,
-        loss_nll_knn,
-        loss_nll_norm,
 )
 from information_hydrology.utils.metrics import calc_nse
 from information_hydrology.utils.miscellaneous import seconds_to_time, set_seed
@@ -23,7 +21,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "VLSTM-064-DENSE-LEARN_NLL-KDE-KLD_060"
+experiment_name = "VLSTM-064-DENSE_NLL-CUSTOM-KLD_S42_010"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -48,15 +46,17 @@ logger.info(f"Using device: {device}")
 
 # Model
 num_inputs = len(config_data["dynamic_inputs"]) + len(config_data["static_attributes"])
-num_hidden = 250
+num_hidden = 64
 output_dropout = 0.4
-model = VLSTM(num_inputs, num_hidden, output_dropout, ErrorMode.PROPORTIONAL).to(device)
+num_dense_layers = 2
+model = VLSTM(num_inputs, num_hidden, output_dropout, ErrorMode.DENSE, num_layers=num_dense_layers).to(device)
 config_model = {
         "name": "vLSTM",
         "num_inputs": num_inputs,
         "num_hidden": num_hidden,
         "percent_dropout": output_dropout,
-        "error": "proportional",
+        "error": "dense",
+        "num_layers": num_dense_layers,
     }
 
 logger.info(f"Model: {config_model['name']}")
@@ -135,7 +135,8 @@ def training_loop(epoch: int, period: str):
         _, _, logvar = model(x)
         samples = model.sample(x, 1_000, SamplingMode.LEARNED, track_grad=misc["track_grad"])
 
-        loss_1 = loss_nll(samples, y, Distribution.GAUSSIAN)
+        # loss_1 = loss_nll(samples, y, Distribution.GAUSSIAN)
+        loss_1 = loss_nll_kde(samples, y)
         loss_2 = loss_kld(logvar)
         loss = loss_1 + betas[epoch] * loss_2
         nse = calc_nse(y.flatten().detach().cpu().numpy(), samples.mean(dim=1).flatten().detach().cpu().numpy())
@@ -167,11 +168,11 @@ def training_loop(epoch: int, period: str):
 
 # # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
 
-num_epochs = 40
-num_validate_every = 2
+num_epochs = 10
+num_validate_every = 1
 
-lrs = [1e-3] * 30 + [1e-4] * 10
-betas = [1e-3] * 30 + [1e-2] * 10
+lrs = [1e-2] * 10
+betas = [1e-3] * 10
 
 logger.info("Training/validation loop")
 logger.info(f"{'':^5} | {'Training':^76} | {'Validation':^54} |")

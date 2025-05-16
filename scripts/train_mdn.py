@@ -17,8 +17,8 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "LSTMCMAL-064-03_NLL-LAPLACE_S01_005"
-seed = set_seed(1)
+experiment_name = "LSTMCMAL-064-03_NLL-LAPLACE_S42_010"
+seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
 # Read config
@@ -46,7 +46,7 @@ num_inputs = len(config_data["dynamic_inputs"]) + len(config_data["static_attrib
 num_hidden = 64
 distribution = Distribution.LAPLACE
 num_components = 3
-output_dropout = 0.4
+output_dropout = 0.5
 model = LSTMMDN(num_inputs, num_hidden, distribution, num_components, output_dropout).to(device)
 config_model = {
         "name": "LSTMCMAL",
@@ -133,8 +133,8 @@ def training_loop(epoch: int, period: str):
         y_hat = model(x)
         loss = loss_nll(y_hat, y, Distribution.LAPLACE)
 
-        mean = model.calc_mean(x)
-        nse = calc_nse(y.flatten().detach().cpu().numpy(), mean)
+        mean = model.mean(x)
+        nse = calc_nse(y.flatten().detach().cpu().numpy(), mean.flatten().detach().cpu().numpy())
 
         if period == "train":
             loss.backward()
@@ -164,10 +164,10 @@ def training_loop(epoch: int, period: str):
 
 # # # # # # # # # # # # # # # PART 04 # # # # # # # # # # # # # # # # #
 
-num_epochs = 20
+num_epochs = 10
 num_validate_every = 1
 
-lrs = [1e-2] * 20
+lrs = [1e-2] * 10
 
 logger.info("Training loop")
 time_training = time.time()

@@ -16,7 +16,7 @@ from tqdm import tqdm, trange
 # # # # # # # # # # # # # # # PART 00 # # # # # # # # # # # # # # # # #
 
 # General config
-experiment_name = "LSTM-064_NSE_060"
+experiment_name = "LSTM-064_NSE_S42_010"
 seed = set_seed(42)
 path_save_folder = Path("experiments") / (experiment_name + time.strftime(r"_%Y-%m-%d_%H-%M-%S"))
 
@@ -96,7 +96,7 @@ ds_val.standardize_data(standardize_output=False)
 dl_val = DataLoader(
     ds_val,
     batch_size=config_data["batch_size"],
-    shuffle=False,
+    shuffle=True,
     drop_last=True,
     collate_fn=ds_val.collate_fn,
 )
