@@ -68,10 +68,10 @@ class LSTMMDN(nn.Module):
             match self.distribution:
                 case Distribution.GAUSSIAN:
                     loc, scale, _ = moments
-                    samples = torch.randn(num_batches, num_components, num_samples)
+                    samples = torch.randn(num_batches, num_components, num_samples).to(x.device)
                 case Distribution.LAPLACE:
                     loc, scale, kappa = moments
-                    u = torch.rand(num_batches, num_components, num_samples)  # [num_batches, num_components, num_samples]
+                    u = torch.rand(num_batches, num_components, num_samples).to(x.device)
                     # Sampling left or right of the mode?
                     kappa = kappa.unsqueeze(-1).repeat((1, 1, num_samples))  # [num_batches, num_components, num_samples]
                     p_at_mode = kappa**2 / (1 + kappa**2) # [num_batches, num_components]

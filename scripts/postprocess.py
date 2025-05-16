@@ -134,7 +134,7 @@ def generate_netcdf(path_to_model_dict: Path) -> Tuple[str, xr.Dataset]:
 
             dates.append(date) # list of num_batches
             y_obs.append(y.detach().cpu().clone().numpy()[:, 0]) # [batch_size, num_targets]
-            y_hat.append(y_hat_sample)
+            y_hat.append(y_hat_sample.detach().cpu().clone().numpy())
             if model_name == "LSTMCMAL" or model_name == "LSTMGMM":
                 loc.append(loc_batch.detach().cpu().clone().numpy())
                 scale.append(scale_batch.detach().cpu().clone().numpy())
