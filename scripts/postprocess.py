@@ -255,13 +255,14 @@ def generate_metrics(ds: xr.Dataset, name: str, path_metrics: Path) -> None:
         metrics[experiment_name][basin]["FHV"] = float(calc_metrics.fdc_fhv(data.y_obs, y_hat_mean))
         metrics[experiment_name][basin]["FLV"] = float(calc_metrics.fdc_flv(data.y_obs, y_hat_mean))
         metrics[experiment_name][basin]["FMS"] = float(calc_metrics.fdc_fms(data.y_obs, y_hat_mean))
+        metrics[experiment_name][basin]["LOGLIK"] = {"True": float("nan"), "KDE": float("nan")}
+        metrics[experiment_name][basin]["CRPS"] = float("nan")
         if model not in ["LSTM"]:
-            metrics[experiment_name][basin]["LOGLIK_TRU"] = float("nan")
-            metrics[experiment_name][basin]["LOGLIK_KDE"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
+            metrics[experiment_name][basin]["LOGLIK"]["KDE"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
             metrics[experiment_name][basin]["CRPS"] = calc_crps(data.y_obs.values, data.y_hat.values)
         if model in ["LSTMCMAL", "LSTMGMM"]:
             loglik = -1 * loss_nll((params, w), torch.tensor(data.y_obs.values, requires_grad=False).reshape(-1, 1), dist_arg)
-            metrics[experiment_name][basin]["LOGLIK_TRU"] = float(loglik.item())
+            metrics[experiment_name][basin]["LOGLIK"]["True"] = float(loglik.item())
         if model == "VLSTM":
             samples = torch.tensor(data.y_hat.values, requires_grad=False).unsqueeze(-1)
             obs = torch.tensor(data.y_obs.values, requires_grad=False).reshape(-1, 1)
@@ -269,11 +270,7 @@ def generate_metrics(ds: xr.Dataset, name: str, path_metrics: Path) -> None:
                 loglik = -1 * loss_nll(samples, obs, Distribution.GAUSSIAN)
             else:
                 loglik = -1 * loss_nll_kde(samples, obs)
-            metrics[experiment_name][basin]["LOGLIK_TRU"] = float(loglik.item())
-        if model == "LSTM":
-            metrics[experiment_name][basin]["LOGLIK_TRU"] = float("nan")
-            metrics[experiment_name][basin]["LOGLIK_KDE"] = float("nan")
-            metrics[experiment_name][basin]["CRPS"] = float("nan")
+            metrics[experiment_name][basin]["LOGLIK"]["True"] = float(loglik.item())
         
     with Path.open(path_metrics, "w") as f:
         json.dump(metrics, f, indent=4)
