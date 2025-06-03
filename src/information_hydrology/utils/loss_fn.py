@@ -3,7 +3,6 @@ from typing import Tuple
 import numpy as np
 import torch
 from torch import nn
-from torchkde import KernelDensity
 
 from information_hydrology.utils.distributions import Distribution
 
@@ -158,47 +157,24 @@ def loss_mse(y_hat: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     y_hat, y = _mask(y_hat, y)
     return nn.functional.mse_loss(y_hat, y)
 
-def loss_nll_kde(y_hat, y):
-    """Calculates the negative log-likelihood loss using kernel density
-    estimation (KDE).
-
-    For each batch in the sample, creates a KDE distribution using the
-    predicted points *y_hat* to evaluate the density of *y*. This density is
-    used to approximate the negative log-likelihood loss.
-
-    Parameters
-    ----------
-    y_hat : torch.Tensor (num_batches x num_samples x num_dim)
-        The predicted data points.
-    y : torch.Tensor (num_batches x num_dim)
-        The observed point.
-
-    Returns
-    -------
-    torch.Tensor
-        The computed negative log-likelihood loss.
-    """
-    y_hat, y = _mask(y_hat, y)
-    num_batches, _, _ = y_hat.shape
-
-    logprob = []
-    for idx in range(num_batches):
-        kde = KernelDensity(bandwidth="silverman", kernel="gaussian")
-        _ = kde.fit(y_hat[idx])
-        logprob.append(kde.score_samples(y[idx]))
-    logprob = torch.stack(logprob)
-    loss = -logprob.mean()
-    return loss
+def batch_cov(data):
+    num_batches, num_samples, num_dims = data.shape
+    mean = data.mean(dim=1).unsqueeze(1)
+    diffs = (data - mean).reshape(num_batches * num_samples, num_dims)
+    prods = torch.bmm(diffs.unsqueeze(2), diffs.unsqueeze(1)).reshape(num_batches, num_samples, num_dims, num_dims)
+    bcov = prods.sum(dim=1) / (num_samples - 1)  # Unbiased estimate
+    return bcov  # (num_batches, num_dims, num_dims)
 
 def silverman(data):
-    n = data.shape[1] # num_samples
-    std = data.std(dim=1)
-    iqr = data.quantile(0.75, dim=1) - data.quantile(0.25, dim=1)
-    a = torch.min(std, iqr / 1.349)
-    h = 0.9 * a * (n ** (-1 / 5)) # [num_batches x 1]
+    num_batches, num_samples, num_dims = data.shape
+
+    cov = batch_cov(data)
+
+    h = (4. / (num_samples * (num_dims + 2))) ** (2. / (num_dims + 4)) * cov
+    h = torch.diagonal(h, dim1=-2, dim2=-1).sqrt()  # (num_batches, num_dims, num_dims)
     return h
 
-def loss_kde_custom_kde(y_hat, y):
+def loss_nll_kde(y_hat, y):
     num_samples = y_hat.shape[1]
 
     # Adjust shapes
