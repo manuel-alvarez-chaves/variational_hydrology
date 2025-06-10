@@ -115,7 +115,7 @@ def generate_netcdf(path_to_model_dict: Path) -> Tuple[str, xr.Dataset]:
                 case "LSTM":
                     pred = model(sample)["y_hat"][:, 0] # [batch_size, num_targets]
                     pred = pred.unsqueeze(1) # [batch_size, num_samples, num_targets]
-                    y_hat_sample = pred.detach().cpu().clone().numpy()[:, :, 0] # [batch_size, num_samples] 
+                    y_hat_sample = pred[:, :, 0] # [batch_size, num_samples] 
                 case "vLSTM":
                     pred = model.sample(x, num_samples, mode=SamplingMode.LEARNED, track_grad=False) # [batch_size, num_samples, num_targets]
                     y_hat_sample = pred[:, :, 0] # [batch_size, num_samples]
