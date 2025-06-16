@@ -266,10 +266,7 @@ def generate_metrics(ds: xr.Dataset, name: str, path_metrics: Path) -> None:
         if model == "VLSTM":
             samples = torch.tensor(data.y_hat.values, requires_grad=False).unsqueeze(-1)
             obs = torch.tensor(data.y_obs.values, requires_grad=False).reshape(-1, 1)
-            if name.split("_")[0].split("-")[-1] == "PRO":
-                loglik = -1 * loss_nll(samples, obs, Distribution.GAUSSIAN)
-            else:
-                loglik = -1 * loss_nll_kde(samples, obs)
+            loglik = -1 * loss_nll_kde(samples, obs)
             metrics[experiment_name][basin]["LOGLIK"]["True"] = float(loglik.item())
         
     with Path.open(path_metrics, "w") as f:
