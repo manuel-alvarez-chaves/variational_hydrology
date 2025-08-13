@@ -26,7 +26,7 @@ def calc_reliability(data):
         y_hat = basin_data["y_hat"].values
         _, n_samples = y_hat.shape
         
-        ### PICP
+        ### PICP: prediction interval coverage probability
         # Calculate all quantiles at once
         model_lowers = np.quantile(y_hat, lower_quantiles, axis=1)
         model_uppers = np.quantile(y_hat, upper_quantiles, axis=1)
@@ -40,16 +40,16 @@ def calc_reliability(data):
         results["basins"][basin] = {}
         results["basins"][basin]["PICP"] = picp_coverage.tolist()
 
-        ### PIT
+        ### PIT: probability integral transform
         pit_values = np.zeros_like(y_obs)
     
         for idx, _ in enumerate(y_obs):
             obs = y_obs[idx]
-            forecast_dist = y_hat[idx, :]
+            samples = y_hat[idx, :]
             
-            rank = np.sum(forecast_dist <= obs)
+            rank = np.sum(samples <= obs)
             u = np.random.uniform(0, 1) # prevents ties
-            pit_values[idx] = (rank + u) / (n_samples + 1)
+            pit_values[idx] = (rank + u) / (n_samples + 1) # value in the CDF
         
         pit_coverage = np.array([np.mean(pit_values <= q) for q in alphas])
         results["basins"][basin]["PIT"] = pit_coverage.tolist()
