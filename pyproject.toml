@@ -16,8 +16,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "xarray[io]>=2024.11.0",
     "neuralhydrology>=1.11.0",
-    "unite-toolbox>=0.1.9",
     "pyyaml>=6.0.2",
+    "unite-toolbox>=0.2.1",
 ]
 
 [dependency-groups]
