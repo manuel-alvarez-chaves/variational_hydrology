@@ -1,6 +1,6 @@
-# Information Hydrology
+# Variational Hydrology
 
-A repository for the development of hydrological rainfall-runoff models using Information Theory.
+Code for the paper: *A variational approach at uncertainty estimation in rainfall-runoff modeling*.
 
 ## Installation
 Installation is not so easy because some dependency issues between `numpy`, `numba` and `llvmlite`. My suggestion is to install using [uv](https://docs.astral.sh/uv/) or carefully follow the list of requirements in the `pyproject.toml`.
@@ -9,12 +9,8 @@ Here's the command to install using `uv` with the project directory being the cu
 ```console
 uv sync
 ```
-This project also benefits of having local copies of `Hy2DL` and `unite_toolbox`. If these projects are at the same level of the `information_hydrology` directory, they can be installed as editable packages using:
-```console
-uv pip install -e ../Hy2DL
-uv pip install -e ../unite_toolbox
-```
-Both packages should fulfill the required version in the `pyproject.toml`.
+
+Check the requirements in the `pyproject.toml`.
 
 ## Usage
 
