@@ -6,6 +6,7 @@ dashboard/*.ipynb
 do_runs.sh
 scripts/*/
 notes/
+.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
