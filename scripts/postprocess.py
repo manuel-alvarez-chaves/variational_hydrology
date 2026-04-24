@@ -257,6 +257,9 @@ def generate_metrics(ds: xr.Dataset, name: str, path_metrics: Path) -> None:
         metrics[experiment_name][basin]["FMS"] = float(calc_metrics.fdc_fms(data.y_obs, y_hat_mean))
         metrics[experiment_name][basin]["LOGLIK"] = {"True": float("nan"), "KDE": float("nan")}
         metrics[experiment_name][basin]["CRPS"] = float("nan")
+        samples = data.y_hat.values
+        mask = (samples >= 0).all(0)
+        samples = samples[:, mask] 
         if model not in ["LSTM"]:
             metrics[experiment_name][basin]["LOGLIK"]["KDE"] = calc_kde_loglik(data.y_obs.values, data.y_hat.values)
             metrics[experiment_name][basin]["CRPS"] = calc_crps(data.y_obs.values, data.y_hat.values)
