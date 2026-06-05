@@ -174,20 +174,40 @@ def silverman(data):
     h = torch.diagonal(h, dim1=-2, dim2=-1).sqrt()  # (num_batches, num_dims, num_dims)
     return h
 
-def loss_nll_kde(y_hat, y):
-    num_samples = y_hat.shape[1]
+def get_silverman_bandwidth(data: torch.Tensor) -> torch.Tensor:
+    num_batches, num_samples, num_features = data.shape
 
-    # Adjust shapes
-    h = silverman(y_hat) # [num_batches x 1]
-    h = h.unsqueeze(1).repeat(1, num_samples, 1) # [num_batches x num_samples x 1]
-    sigma = y_hat.std(dim=1).unsqueeze(1).repeat(1, num_samples, 1) # [num_batches x num_samples x 1]
-    y = y.unsqueeze(1).repeat(1, num_samples, 1)
-    
-    # Calculate KDE log-likelihood
-    dist = (y - y_hat).pow(2)
-    p = -1 * dist / (2 * (h**2) * (sigma**2))
-    p = p.exp().sum(dim=1)
-    p = torch.clamp(p, min=1e-10)
-    log_p = p.log() - torch.log(num_samples * h[:, 0, :] * sigma[:, 0, :]) - np.log(np.sqrt(2 * np.pi))
-    loss = -1 * log_p.mean(dim=0)
+    # 1. Compute variance per batch and dimension independently
+    var = data.var(dim=1, unbiased=True)
+    stdev = torch.sqrt(var + 1e-8) # [num_batches, num_features]
+
+    # 2. Apply Silverman's Rule
+    power = 1.0 / (num_features + 4.0) # float
+    constant = (4.0 / (num_samples * (num_features + 2.0))) ** power # float
+
+    h = constant * stdev # [num_batches, num_features]
+
+    return h.unsqueeze(1) # [num_batches, 1, num_features] for broadcasting
+
+def loss_nll_kde(y_hat: torch.Tensor, y_obs: torch.Tensor) -> torch.Tensor:
+    num_batches, num_samples, num_features = y_hat.shape
+
+    # 1. Compute Silverman's bandwidth
+    h = get_silverman_bandwidth(y_hat) # [num_batches, 1, num_features]
+
+    # 2. Reshape y_obs for broadcasting
+    y_obs = y_obs.unsqueeze(1) # [num_batches, 1, num_features]
+
+    # 3. Compute squared distance and exponent
+    squared_diff = ((y_obs - y_hat) / h) ** 2 # [num_batches, num_samples, num_features]
+    exponent = -0.5 * squared_diff.sum(dim=-1) # [num_batches, num_samples]
+
+    # 4. Compute normalization factor per batch
+    h_prod = h.prod(dim=-1).view(-1) # [num_batches]
+    normalization = num_samples * (2.0 * torch.pi) ** (num_features / 2.0) * h_prod # [num_batches]
+
+    # 5. Calculate the NLL loss
+    log_p = torch.logsumexp(exponent, dim=-1) - torch.log(normalization + 1e-8) # [num_batches]
+
+    loss = -1 * log_p.mean() # scalar
     return loss
