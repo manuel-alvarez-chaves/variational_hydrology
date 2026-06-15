@@ -12,6 +12,9 @@ uv sync
 
 Check the requirements in the `pyproject.toml`.
 
+### Dependency issues
+This code depends on an older version of the [Hy2DL](https://github.com/eduardoAcunaEspinoza/Hy2DL) library (0.2.0). This is included as a submodule in the `root` directory in the DaRUS repository.
+
 ## Usage
 
 In the [examples](./examples/) directory there's an example for how to code a model inside a Jupyer Notebook. Typically a model will get coded before adapting an existing training script in the [scripts](./scripts/) directory to train using an external GPU and more data.
