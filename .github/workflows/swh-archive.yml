@@ -3,7 +3,8 @@ name: Archive Code to Software Heritage
 on:
   push:
     tags:
-      - 'v*'
+      - 'v**'
+      - 'v1.0'
 
 jobs:
   archive:
