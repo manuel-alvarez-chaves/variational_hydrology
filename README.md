@@ -1,4 +1,5 @@
 # Variational Hydrology
+[![Identifier]](https://img.shields.io/badge/doi-10.18419%2Fdarus--5118-d45815.svg)](https://doi.org/10.18419/darus-5118)
 
 Code for the paper: *A variational approach at uncertainty estimation in rainfall-runoff modeling*.
 
