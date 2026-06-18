@@ -1,0 +1,16 @@
+name: Archive Code to Software Heritage
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Save to Software Heritage
+      uses: sdruskat/swh-save-action@v1.0.1
